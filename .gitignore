@@ -1,0 +1,6 @@
+# Generated reader pages
+*.speedread.html
+
+# OS junk
+.DS_Store
+Thumbs.db

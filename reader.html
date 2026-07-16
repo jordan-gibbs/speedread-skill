@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- A portable cousin of the RSVP reader at https://speedread.life -->
+<title>SpeedRead Report</title>
+<!-- Same fonts as speedread.life; falls back to system fonts when offline -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Fira+Mono:wght@400;500;700&family=Source+Code+Pro:wght@400;500;600;700&family=Inconsolata:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Design tokens ported verbatim from speedread.life (frontend/src/index.css) */
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --radius: 0.5rem;
+  }
+  :root[data-theme="dark"] {
+    --background: 0 0% 5%;
+    --foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+  }
+  * { box-sizing: border-box; border-color: hsl(var(--border)); }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column;
+  }
+
+  /* ---- shadcn-style buttons ---- */
+  button {
+    display: inline-flex; align-items: center; justify-content: center;
+    white-space: nowrap; border-radius: calc(var(--radius) - 2px);
+    font-family: inherit; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: background-color .15s, color .15s, border-color .15s;
+    border: none; background: none; color: inherit; padding: 0;
+  }
+  button:disabled { pointer-events: none; opacity: .5; }
+  .btn-outline {
+    border: 1px solid hsl(var(--input)); background: hsl(var(--background));
+  }
+  .btn-outline:hover { background: hsl(var(--accent)); color: hsl(var(--accent-foreground)); }
+  .btn-primary {
+    background: hsl(var(--primary)); color: hsl(var(--primary-foreground));
+  }
+  .btn-primary:hover { background: hsl(var(--primary) / .9); }
+  .icon-lg { height: 56px; width: 56px; }
+  .icon-md { height: 40px; width: 40px; }
+  button svg { flex-shrink: 0; }
+
+  /* ---- header ---- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px;
+  }
+  #logo { height: 32px; width: auto; }
+  :root[data-theme="dark"] #logo { filter: invert(1); }
+  body.playing header { display: none; }
+
+  /* ---- breadcrumb (MD extra; floats top-center, visible while playing) ---- */
+  #crumb {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: hsl(var(--muted-foreground)); font-size: 13px; z-index: 60;
+    pointer-events: none;
+  }
+
+  /* ---- main column (mirrors the site's reading view) ---- */
+  #content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .col {
+    width: 100%; max-width: 896px; margin: auto; padding: 32px;
+    display: flex; flex-direction: column; gap: 40px;
+  }
+  body.playing .col > :not(#stage) { display: none; }
+
+  /* ---- word display ---- */
+  #stage {
+    height: 256px; display: flex; flex-direction: column; gap: 20px;
+    align-items: center; justify-content: center;
+    overflow: hidden; cursor: pointer; user-select: none; -webkit-user-select: none;
+  }
+  body.playing #stage {
+    position: fixed; inset: 0; z-index: 50; height: auto;
+    background: hsl(var(--background)); cursor: default;
+  }
+  .word-row { display: flex; align-items: baseline; font-weight: 500; line-height: 1.2; }
+  .side { white-space: pre; overflow: hidden; }
+  .side.pre { text-align: right; color: hsl(var(--foreground)); }
+  .side.suf { text-align: left; color: hsl(var(--foreground)); }
+  .marker { color: hsl(var(--muted-foreground)); }
+  .state-tok { font-weight: 500; color: hsl(var(--muted-foreground)); }
+  .heading-tok {
+    font-weight: 700; text-align: center; max-width: 82vw; line-height: 1.25;
+  }
+  .hr-tok { color: hsl(var(--muted-foreground)); letter-spacing: .4em; }
+
+  .block-tok {
+    max-width: min(920px, 92vw); max-height: 62vh; overflow: auto; cursor: auto;
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--border)); border-radius: var(--radius);
+    padding: 18px 22px; font-size: 14px;
+  }
+  .block-tok pre {
+    margin: 0; font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+    white-space: pre; font-size: 13.5px; line-height: 1.5;
+  }
+  .block-hint { color: hsl(var(--muted-foreground)); font-size: 12.5px; margin-top: 12px; text-align: center; font-family: 'Inter', system-ui, sans-serif; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid hsl(var(--border)); padding: 6px 10px; text-align: left; font-size: 13.5px; }
+  th { background: hsl(var(--secondary)); }
+
+  /* ---- paused progress (site: h-3 bar + "x / y words • time") ---- */
+  #pausedProgress { display: flex; flex-direction: column; gap: 12px; }
+  .bar { background: hsl(var(--secondary)); border-radius: 9999px; overflow: hidden; }
+  .bar-fill { height: 100%; background: hsl(var(--primary)); transition: width .1s linear; }
+  #pausedBar { height: 12px; }
+  #pausedText { text-align: center; color: hsl(var(--muted-foreground)); font-size: 16px; }
+  #pausedText .dot { margin: 0 8px; }
+
+  /* ---- controls (site: back/restart/play + skip row) ---- */
+  #controls { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .ctlrow { display: flex; align-items: center; justify-content: center; gap: 16px; }
+  .skiprow { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .skiprow button { height: 40px; padding: 0 16px; gap: 8px; }
+  #playBtn { width: 128px; height: 56px; font-size: 18px; gap: 8px; }
+
+  /* ---- settings ---- */
+  #settings { display: flex; flex-direction: column; gap: 32px; }
+  body.finished #settings, body.finished #controls { }
+  .grid2 {
+    display: grid; grid-template-columns: 1fr; gap: 24px 48px;
+  }
+  @media (min-width: 768px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+  .ctl { display: flex; flex-direction: column; gap: 12px; }
+  .ctl-head { display: flex; justify-content: space-between; align-items: center; }
+  .ctl-label { font-size: 14px; color: hsl(var(--muted-foreground)); }
+  .ctl-val { font-size: 14px; font-weight: 500; }
+  .ctl-minmax { display: flex; justify-content: space-between; font-size: 12px; color: hsl(var(--muted-foreground)); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%;
+    height: 8px; border-radius: 9999px; background: hsl(var(--secondary));
+    outline: none; cursor: pointer; margin: 6px 0;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: hsl(var(--background)); border: 2px solid hsl(var(--primary));
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px; border-radius: 50%;
+    background: hsl(var(--background)); border: 2px solid hsl(var(--primary));
+    cursor: pointer;
+  }
+
+  /* color swatches (site: w-10 h-10 rounded-full, ring when selected) */
+  .swatches { display: flex; gap: 12px; }
+  .swatch {
+    width: 40px; height: 40px; border-radius: 9999px;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .swatch:hover { transform: scale(1.05); }
+  .swatch.sel {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--foreground));
+  }
+
+  /* switch (site: h-6 w-11 pill) */
+  .switch {
+    position: relative; width: 44px; height: 24px; border-radius: 9999px;
+    background: hsl(var(--input)); transition: background-color .15s;
+  }
+  .switch.on { background: hsl(var(--primary)); }
+  .switch .knob {
+    position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+    border-radius: 9999px; background: hsl(var(--background));
+    box-shadow: 0 2px 6px rgba(0,0,0,.25); transition: transform .15s;
+  }
+  .switch.on .knob { transform: translateX(20px); }
+  .switchrow { display: flex; justify-content: space-between; align-items: center; }
+
+  /* font buttons (site: pill buttons in each font) */
+  .fontbtns { display: flex; flex-wrap: wrap; gap: 8px; }
+  .fontbtn {
+    padding: 8px 12px; border-radius: calc(var(--radius) - 2px); font-size: 14px;
+    background: hsl(var(--secondary)); color: hsl(var(--secondary-foreground));
+    transition: background-color .15s, color .15s;
+  }
+  .fontbtn:hover { background: hsl(var(--secondary) / .8); }
+  .fontbtn.sel { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
+
+  /* credit */
+  #credit {
+    text-align: center; font-size: 12px;
+    color: hsl(var(--muted-foreground)); opacity: .7;
+    margin-top: -24px;
+  }
+  #credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  #credit a:hover { color: hsl(var(--foreground)); }
+
+  /* keyboard hints */
+  #hints { text-align: center; font-size: 14px; color: hsl(var(--muted-foreground)); }
+  #hints .desktop { display: none; }
+  #hints .desktop span { margin: 0 12px; }
+  @media (min-width: 768px) {
+    #hints .desktop { display: block; }
+    #hints .mobile { display: none; }
+  }
+
+  /* playing footer (site: fixed bottom-8, max-w-md progress + hint) */
+  #playfooter {
+    display: none; position: fixed; bottom: 32px; left: 0; right: 0; z-index: 55;
+    flex-direction: column; align-items: center; gap: 16px; padding: 0 32px;
+    pointer-events: none;
+  }
+  body.playing #playfooter { display: flex; }
+  #playProgressWrap { width: 100%; max-width: 448px; display: flex; flex-direction: column; gap: 8px; }
+  #playBar { height: 8px; }
+  #playCount, #playHint { text-align: center; font-size: 14px; color: hsl(var(--muted-foreground)); }
+
+  /* ---- document view ---- */
+  #docview {
+    position: fixed; inset: 0; background: hsl(var(--background)); z-index: 70;
+    overflow-y: auto; padding: 0 20px 60px;
+  }
+  #docview[hidden] { display: none; }
+  .dochead {
+    position: sticky; top: 0; background: hsl(var(--background)); padding: 14px 0;
+    border-bottom: 1px solid hsl(var(--border)); margin-bottom: 24px;
+    display: flex; justify-content: center;
+  }
+  .dochead button { height: 40px; padding: 0 16px; gap: 8px; }
+  #docbody { max-width: 720px; margin: 0 auto; line-height: 1.7; }
+  #docbody h1 { font-size: 1.7em; } #docbody h2 { font-size: 1.35em; margin-top: 1.6em; }
+  #docbody h3 { font-size: 1.12em; margin-top: 1.4em; }
+  #docbody code {
+    background: hsl(var(--secondary)); border-radius: 4px; padding: 1.5px 5px;
+    font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace; font-size: .88em;
+  }
+  #docbody pre {
+    background: hsl(var(--secondary)); border: 1px solid hsl(var(--border));
+    border-radius: var(--radius); padding: 14px 16px; overflow-x: auto; line-height: 1.5;
+  }
+  #docbody pre code { background: none; padding: 0; }
+  #docbody blockquote {
+    margin: 1em 0; padding: 2px 16px;
+    border-left: 3px solid hsl(var(--border)); color: hsl(var(--muted-foreground));
+  }
+  #docbody a { color: inherit; }
+  #docbody hr { border: none; border-top: 1px solid hsl(var(--border)); margin: 2em 0; }
+</style>
+</head>
+<body>
+  <div id="crumb"></div>
+
+  <header>
+    <svg id="logo" viewBox="0 0 666 140" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Speedread">
+      <path d="M71.804 47.2479L56.9425 49.8047C56.6229 47.9226 55.9659 46.147 54.9716 44.478C54.0128 42.809 52.5391 41.4595 50.5504 40.4297C48.5618 39.3643 45.9162 38.8317 42.6136 38.8317C38.0327 38.8317 34.0199 39.8793 30.5753 41.9744C27.1662 44.0696 25.2131 46.733 24.7159 49.9645C24.2543 52.5923 24.8757 54.723 26.5803 56.3565C28.2848 57.9545 31.2855 59.2862 35.5824 60.3516L48.1534 63.3345C55.3977 65.0746 60.5824 67.7912 63.7074 71.4844C66.8679 75.142 67.9687 79.9006 67.0099 85.7599C66.1932 90.625 64.0625 94.9396 60.6179 98.7038C57.2088 102.468 52.8409 105.415 47.5142 107.546C42.1875 109.677 36.2571 110.742 29.723 110.742C20.419 110.742 13.1747 108.771 7.99005 104.83C2.80539 100.888 0.14204 95.3125 -5.47245e-06 88.1037L15.767 85.7599C16.0511 89.7727 17.4893 92.809 20.0817 94.8686C22.7095 96.8928 26.3494 97.9048 31.0014 97.9048C36.3281 97.9403 40.7848 96.8217 44.3714 94.549C47.9581 92.2763 50 89.5242 50.4972 86.2926C50.9233 83.7713 50.3551 81.6761 48.7926 80.0071C47.2656 78.3381 44.5668 77.0597 40.696 76.1719L27.4858 73.1357C20.0994 71.3956 14.8793 68.5902 11.8253 64.7195C8.7713 60.8487 7.74147 55.9837 8.73579 50.1243C9.51704 45.3303 11.5412 41.1577 14.8082 37.6065C18.1108 34.0199 22.2834 31.2322 27.326 29.2436C32.3686 27.2195 37.9439 26.2074 44.0518 26.2074C52.9652 26.2074 59.6591 28.125 64.1335 31.9602C68.6079 35.7599 71.1648 40.8558 71.804 47.2479ZM63.5193 139.773L82.3759 27.2727H97.9299L95.7459 40.5362H97.0776C98.285 38.8317 99.9185 36.8608 101.978 34.6236C104.073 32.3864 106.825 30.4332 110.235 28.7642C113.644 27.0597 117.887 26.2074 122.965 26.2074C129.57 26.2074 135.164 27.8764 139.744 31.2145C144.325 34.5526 147.593 39.3643 149.546 45.6499C151.499 51.9354 151.747 59.4993 150.291 68.3416C148.835 77.184 146.101 84.7656 142.088 91.0866C138.075 97.3722 133.21 102.219 127.493 105.629C121.811 109.002 115.65 110.689 109.009 110.689C104.038 110.689 100.114 109.854 97.2374 108.185C94.3965 106.516 92.2836 104.563 90.8986 102.326C89.5137 100.089 88.4661 98.1001 87.7559 96.3601H86.797L79.5527 139.773H63.5193ZM91.1649 68.1818C90.2417 73.9347 90.2417 78.9773 91.1649 83.3097C92.0882 87.642 93.9348 91.0334 96.7047 93.4837C99.5101 95.8984 103.203 97.1058 107.784 97.1058C112.543 97.1058 116.715 95.8452 120.302 93.3239C123.889 90.767 126.854 87.3047 129.198 82.9368C131.577 78.5689 133.228 73.6506 134.151 68.1818C135.039 62.7841 135.021 57.9368 134.098 53.6399C133.21 49.343 131.382 45.9517 128.612 43.4659C125.842 40.9801 122.06 39.7372 117.266 39.7372C112.614 39.7372 108.494 40.9268 104.908 43.3061C101.357 45.6854 98.4093 49.0057 96.0655 53.267C93.7218 57.5284 92.0882 62.5 91.1649 68.1818ZM260.684 110.742C252.659 110.742 246.018 109.02 240.762 105.575C235.542 102.095 231.884 97.2124 229.789 90.9268C227.694 84.6058 227.357 77.2017 228.777 68.7145C230.162 60.3338 232.95 52.9474 237.14 46.5554C241.33 40.1634 246.551 35.174 252.801 31.5874C259.086 28.0007 266.029 26.2074 273.628 26.2074C278.244 26.2074 282.595 26.9709 286.678 28.4979C290.798 30.0249 294.296 32.4219 297.172 35.6889C300.048 38.956 302.037 43.1996 303.138 48.4197C304.274 53.6044 304.239 59.9077 303.031 67.3295L302.126 72.9759H237.034L238.898 61.044H288.33C289.075 56.8537 288.88 53.1428 287.744 49.9112C286.607 46.6442 284.654 44.0696 281.884 42.1875C279.15 40.3054 275.705 39.3643 271.551 39.3643C267.289 39.3643 263.312 40.483 259.619 42.7202C255.926 44.9574 252.836 47.8161 250.35 51.2962C247.9 54.7408 246.355 58.2919 245.716 61.9496L243.852 72.8693C242.928 78.8352 243.088 83.6293 244.331 87.2514C245.61 90.8736 247.847 93.5014 251.043 95.1349C254.239 96.7685 258.234 97.5852 263.028 97.5852C266.117 97.5852 268.976 97.1591 271.604 96.3068C274.267 95.419 276.629 94.1229 278.688 92.4183C280.748 90.6783 282.47 88.5121 283.855 85.9197L298.45 88.6364C296.497 93.0753 293.692 96.9638 290.034 100.302C286.377 103.604 282.062 106.179 277.09 108.026C272.154 109.837 266.686 110.742 260.684 110.742ZM332.487 110.689C325.846 110.689 320.217 109.002 315.601 105.629C311.02 102.219 307.771 97.3722 305.853 91.0866C303.971 84.7656 303.758 77.184 305.214 68.3416C306.705 59.4993 309.457 51.9354 313.47 45.6499C317.483 39.3643 322.348 34.5526 328.065 31.2145C333.783 27.8764 339.944 26.2074 346.549 26.2074C351.627 26.2074 355.569 27.0597 358.374 28.7642C361.215 30.4332 363.31 32.3864 364.66 34.6236C366.009 36.8608 367.021 38.8317 367.696 40.5362H368.602L375.366 -4.76837e-07H391.293L373.183 109.091H357.629L359.812 96.3601H358.481C357.238 98.1001 355.516 100.089 353.314 102.326C351.148 104.563 348.378 106.516 345.004 108.185C341.631 109.854 337.458 110.689 332.487 110.689ZM337.866 97.1058C342.447 97.1058 346.549 95.8984 350.171 93.4837C353.829 91.0334 356.865 87.642 359.28 83.3097C361.73 78.9773 363.435 73.9347 364.393 68.1818C365.352 62.5 365.335 57.5284 364.34 53.267C363.346 49.0057 361.428 45.6854 358.587 43.3061C355.746 40.9268 352 39.7372 347.348 39.7372C342.554 39.7372 338.381 40.9801 334.83 43.4659C331.279 45.9517 328.367 49.343 326.094 53.6399C323.857 57.9368 322.295 62.7841 321.407 68.1818C320.484 73.6506 320.448 78.5689 321.3 82.9368C322.153 87.3047 323.946 90.767 326.68 93.3239C329.415 95.8452 333.143 97.1058 337.866 97.1058ZM383.861 109.091L397.497 27.2727H412.892L410.708 40.2699H411.56C413.762 35.8665 416.975 32.4041 421.201 29.8828C425.427 27.326 429.937 26.0476 434.731 26.0476C435.761 26.0476 436.933 26.0831 438.247 26.1541C439.561 26.1896 440.626 26.2784 441.443 26.4205L438.886 41.6548C438.282 41.4773 437.181 41.282 435.583 41.0689C433.985 40.8203 432.334 40.696 430.629 40.696C426.901 40.696 423.438 41.495 420.242 43.093C417.046 44.6555 414.365 46.8395 412.199 49.6449C410.033 52.4148 408.63 55.5753 407.991 59.1264L399.788 109.091H383.861ZM461.842 110.742C453.817 110.742 447.176 109.02 441.92 105.575C436.7 102.095 433.043 97.2124 430.947 90.9268C428.852 84.6058 428.515 77.2017 429.935 68.7145C431.32 60.3338 434.108 52.9474 438.298 46.5554C442.489 40.1634 447.709 35.174 453.959 31.5874C460.244 28.0007 467.187 26.2074 474.786 26.2074C479.403 26.2074 483.753 26.9709 487.837 28.4979C491.956 30.0249 495.454 32.4219 498.33 35.6889C501.207 38.956 503.195 43.1996 504.296 48.4197C505.433 53.6044 505.397 59.9077 504.19 67.3295L503.284 72.9759H438.192L440.056 61.044H489.488C490.234 56.8537 490.038 53.1428 488.902 49.9112C487.766 46.6442 485.812 44.0696 483.043 42.1875C480.308 40.3054 476.864 39.3643 472.709 39.3643C468.447 39.3643 464.47 40.483 460.777 42.7202C457.084 44.9574 453.994 47.8161 451.509 51.2962C449.058 54.7408 447.513 58.2919 446.874 61.9496L445.01 72.8693C444.087 78.8352 444.246 83.6293 445.489 87.2514C446.768 90.8736 449.005 93.5014 452.201 95.1349C455.397 96.7685 459.392 97.5852 464.186 97.5852C467.276 97.5852 470.134 97.1591 472.762 96.3068C475.425 95.419 477.787 94.1229 479.847 92.4183C481.906 90.6783 483.629 88.5121 485.013 85.9197L499.609 88.6364C497.656 93.0753 494.85 96.9638 491.192 100.302C487.535 103.604 483.22 106.179 478.249 108.026C473.312 109.837 467.844 110.742 461.842 110.742ZM526.72 110.902C521.535 110.902 517.008 109.943 513.137 108.026C509.266 106.072 506.407 103.249 504.561 99.5561C502.714 95.8629 502.235 91.3352 503.123 85.973C503.904 81.3565 505.431 77.5568 507.704 74.5739C510.012 71.5909 512.817 69.2294 516.12 67.4893C519.422 65.7138 523.009 64.3821 526.88 63.4943C530.751 62.6065 534.657 61.9496 538.599 61.5234C543.57 60.9553 547.601 60.4759 550.69 60.0852C553.815 59.6946 556.159 59.0909 557.721 58.2742C559.284 57.4219 560.225 56.0369 560.545 54.1193V53.7464C561.29 49.13 560.616 45.5433 558.52 42.9865C556.461 40.3942 552.874 39.098 547.76 39.098C542.434 39.098 537.959 40.2699 534.337 42.6136C530.751 44.9574 528.105 47.5852 526.4 50.4972L512.125 47.0881C514.682 42.1165 517.931 38.1037 521.873 35.0497C525.85 31.9602 530.2 29.723 534.923 28.3381C539.646 26.9176 544.476 26.2074 549.412 26.2074C552.679 26.2074 556.07 26.598 559.586 27.3793C563.101 28.125 566.297 29.5099 569.174 31.5341C572.086 33.5582 574.252 36.4524 575.672 40.2166C577.093 43.9453 577.306 48.7926 576.312 54.7585L567.309 109.091H551.756L553.673 97.9048H553.034C551.684 99.9645 549.802 101.989 547.388 103.977C545.008 105.966 542.096 107.617 538.652 108.931C535.207 110.245 531.23 110.902 526.72 110.902ZM532.153 98.1179C536.592 98.1179 540.516 97.2479 543.925 95.5078C547.37 93.7678 550.157 91.495 552.288 88.6896C554.419 85.8487 555.751 82.8125 556.283 79.581L558.041 69.0341C557.366 69.6023 556.177 70.1172 554.472 70.5788C552.803 71.0405 550.921 71.4489 548.826 71.804C546.731 72.1591 544.671 72.4609 542.647 72.7095C540.658 72.9581 539.007 73.1889 537.693 73.402C534.568 73.7926 531.638 74.4496 528.904 75.3729C526.205 76.2962 523.95 77.6278 522.139 79.3679C520.328 81.0724 519.192 83.3452 518.73 86.1861C518.091 90.1278 519.032 93.1108 521.553 95.1349C524.11 97.1236 527.643 98.1179 532.153 98.1179ZM607.045 110.689C600.404 110.689 594.776 109.002 590.159 105.629C585.578 102.219 582.329 97.3722 580.412 91.0866C578.529 84.7656 578.316 77.184 579.772 68.3416C581.264 59.4993 584.016 51.9354 588.029 45.6499C592.042 39.3643 596.907 34.5526 602.624 31.2145C608.341 27.8764 614.502 26.2074 621.108 26.2074C626.186 26.2074 630.127 27.0597 632.933 28.7642C635.774 30.4332 637.869 32.3864 639.218 34.6236C640.568 36.8608 641.58 38.8317 642.255 40.5362H643.16L649.925 -4.76837e-07H665.852L647.741 109.091H632.187L634.371 96.3601H633.039C631.797 98.1001 630.074 100.089 627.873 102.326C625.706 104.563 622.936 106.516 619.563 108.185C616.189 109.854 612.017 110.689 607.045 110.689ZM612.425 97.1058C617.006 97.1058 621.108 95.8984 624.73 93.4837C628.387 91.0334 631.424 87.642 633.838 83.3097C636.289 78.9773 637.993 73.9347 638.952 68.1818C639.911 62.5 639.893 57.5284 638.899 53.267C637.904 49.0057 635.987 45.6854 633.146 43.3061C630.305 40.9268 626.559 39.7372 621.907 39.7372C617.113 39.7372 612.94 40.9801 609.389 43.4659C605.838 45.9517 602.926 49.343 600.653 53.6399C598.416 57.9368 596.853 62.7841 595.966 68.1818C595.042 73.6506 595.007 78.5689 595.859 82.9368C596.711 87.3047 598.505 90.767 601.239 93.3239C603.973 95.8452 607.702 97.1058 612.425 97.1058Z" fill="black"/>
+      <path d="M184.354 110.742C176.328 110.742 169.688 109.02 164.432 105.575C159.212 102.095 155.554 97.2124 153.459 90.9268C151.364 84.6058 151.027 77.2017 152.447 68.7145C153.832 60.3338 156.62 52.9474 160.81 46.5554C165 40.1634 170.221 35.174 176.471 31.5874C182.756 28.0007 189.699 26.2074 197.298 26.2074C201.914 26.2074 206.265 26.9709 210.348 28.4979C214.468 30.0249 217.966 32.4219 220.842 35.6889C223.718 38.956 225.707 43.1996 226.808 48.4197C227.944 53.6044 227.909 59.9077 226.701 67.3295L225.796 72.9759H160.703L162.568 61.044H212C212.745 56.8537 212.55 53.1428 211.414 49.9112C210.277 46.6442 208.324 44.0696 205.554 42.1875C202.82 40.3054 199.375 39.3643 195.221 39.3643C190.959 39.3643 186.982 40.483 183.289 42.7202C179.596 44.9574 176.506 47.8161 174.02 51.2962C171.57 54.7408 170.025 58.2919 169.386 61.9496L167.522 72.8693C166.598 78.8352 166.758 83.6293 168.001 87.2514C169.279 90.8736 171.517 93.5014 174.713 95.1349C177.909 96.7685 181.904 97.5852 186.698 97.5852C189.787 97.5852 192.646 97.1591 195.274 96.3068C197.937 95.419 200.299 94.1229 202.358 92.4183C204.418 90.6783 206.14 88.5121 207.525 85.9197L222.12 88.6364C220.167 93.0753 217.362 96.9638 213.704 100.302C210.047 103.604 205.732 106.179 200.76 108.026C195.824 109.837 190.355 110.742 184.354 110.742Z" fill="#FF0000"/>
+    </svg>
+    <button class="btn-outline icon-md" id="themeBtn" title="Toggle dark mode"></button>
+  </header>
+
+  <main id="content"><div class="col">
+    <div id="stage"></div>
+
+    <div id="pausedProgress">
+      <div class="bar" id="pausedBar"><div class="bar-fill" id="pausedFill"></div></div>
+      <div id="pausedText"></div>
+    </div>
+
+    <div id="controls">
+      <div class="ctlrow">
+        <button class="btn-outline icon-lg" id="docBtn" title="Document view (D)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        </button>
+        <button class="btn-outline icon-lg" id="restartBtn" title="Restart (R)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+        </button>
+        <button class="btn-primary" id="playBtn" title="Play (Space)"></button>
+      </div>
+      <div class="skiprow" id="skiprow">
+        <button class="btn-outline" id="prevSec" title="Previous section (←)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Section
+        </button>
+        <button class="btn-outline" id="back100">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/></svg>
+          -100
+        </button>
+        <button class="btn-outline" id="back10">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/></svg>
+          -10
+        </button>
+        <button class="btn-outline" id="nextSec" title="Next section (→)">
+          Section
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="settings">
+      <div class="grid2">
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-label">Speed</span><span class="ctl-val" id="wpmV"></span></div>
+          <input type="range" id="wpmR" min="100" max="1600" step="25">
+          <div class="ctl-minmax"><span>100</span><span>1600</span></div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-label">Font Size</span><span class="ctl-val" id="fsV"></span></div>
+          <input type="range" id="fsR" min="48" max="160" step="4">
+          <div class="ctl-minmax"><span>48px</span><span>160px</span></div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-label">Sentence Pause</span><span class="ctl-val" id="pauseV"></span></div>
+          <input type="range" id="pauseR" min="1" max="10" step="0.5">
+          <div class="ctl-minmax"><span>1x</span><span>10x</span></div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-label">Letter Spacing</span><span class="ctl-val" id="lsV"></span></div>
+          <input type="range" id="lsR" min="-0.15" max="0.3" step="0.01">
+          <div class="ctl-minmax"><span>Tight</span><span>Wide</span></div>
+        </div>
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-label">Focus Position</span><span class="ctl-val" id="fpV"></span></div>
+          <input type="range" id="fpR" min="-20" max="20" step="1">
+          <div class="ctl-minmax"><span>Left</span><span>Center</span><span>Right</span></div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="ctl">
+          <div class="ctl-head"><span class="ctl-label">Highlight Color</span></div>
+          <div class="swatches" id="swatches"></div>
+        </div>
+        <div class="switchrow">
+          <span class="ctl-label">Show Progress While Reading</span>
+          <button class="switch" id="progSwitch" role="switch"><span class="knob"></span></button>
+        </div>
+      </div>
+
+      <div class="ctl">
+        <div class="ctl-head"><span class="ctl-label">Font</span></div>
+        <div class="fontbtns" id="fontbtns"></div>
+      </div>
+    </div>
+
+    <div id="hints">
+      <div class="desktop">
+        <span>Space: Play/Pause</span><span>R: Restart</span><span>← →: Sections</span><span>, . : ±15 Words</span><span>D: Document</span>
+      </div>
+      <div class="mobile">Tap the word to play/pause</div>
+    </div>
+
+    <div id="credit">Powered by <a href="https://speedread.life" target="_blank" rel="noopener">speedread.life</a></div>
+  </div></main>
+
+  <div id="playfooter">
+    <div id="playProgressWrap">
+      <div class="bar" id="playBar"><div class="bar-fill" id="playFill"></div></div>
+      <div id="playCount"></div>
+    </div>
+    <div id="playHint">Press Space to pause</div>
+  </div>
+
+  <div id="docview" hidden>
+    <div class="dochead"><button class="btn-outline" id="closeDoc">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+      Back to reader
+    </button></div>
+    <article id="docbody"></article>
+  </div>
+
+<script type="text/markdown" id="md-source">
+%%SPEEDREAD_CONTENT%%
+</script>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// Content loading
+// ---------------------------------------------------------------------------
+// Sentinel built by concatenation so a whole-file string replace during
+// injection cannot touch this line.
+var SENTINEL = '%%' + 'SPEEDREAD_CONTENT' + '%%';
+
+var DEMO = [
+  "# SpeedRead Reader — demo",
+  "",
+  "This file was opened without injected content, so you are reading the built-in demo. Your agent normally replaces this with a **report it wrote for you**.",
+  "",
+  "Press **Space** or click the word to start. The reader slows for headings, holds on **bold terms**, pauses at sentence ends, and stops entirely on code blocks and tables so you can inspect them.",
+  "",
+  "## What gets special pacing",
+  "",
+  "- Headings display whole, then reset the speed ramp",
+  "- **Bold text** runs about 25 percent slower",
+  "- `inline code` is held longer and shown in monospace",
+  "- List items get a short pause at the end of each bullet",
+  "- Long words earn a few extra milliseconds automatically",
+  "",
+  "## Blocks pause the stream",
+  "",
+  "When a code block or table arrives, playback stops until you press Space:",
+  "",
+  "```js",
+  "function orp(word) {",
+  "  return Math.floor(word.length / 4);",
+  "}",
+  "```",
+  "",
+  "| Key | Action |",
+  "| --- | --- |",
+  "| Space | Play, pause, or continue past a block |",
+  "| Left / Right | Previous or next section |",
+  "| , / . | Skip back or forward 15 words |",
+  "| R | Restart |",
+  "| D | Toggle full document view |",
+  "",
+  "> Tip: your speed, font, and theme preferences persist between reports.",
+  "",
+  "---",
+  "",
+  "### Why this exists",
+  "",
+  "Heavy AI workflows produce more prose than anyone wants to scroll through. Let the agent digest the bulk, then ingest the digest here at **500 or more WPM**.",
+  "",
+  "Powered by [speedread.life](https://speedread.life)."
+].join("\n");
+
+function getMarkdown() {
+  var el = document.getElementById('md-source');
+  var raw = (el ? el.textContent : '').replace(/\r\n?/g, '\n');
+  // Reverse the injection escaping of closing script tags.
+  raw = raw.replace(/<\\\/script/gi, '</scr' + 'ipt');
+  if (raw.trim() === SENTINEL || raw.trim() === '') return DEMO;
+  return raw;
+}
+
+// ---------------------------------------------------------------------------
+// Markdown block parser
+// ---------------------------------------------------------------------------
+function parseBlocks(md) {
+  var lines = md.split('\n');
+  var i = 0;
+  if (lines[0] === '---') {              // strip YAML frontmatter
+    var fmEnd = lines.indexOf('---', 1);
+    if (fmEnd > 0) i = fmEnd + 1;
+  }
+  var blocks = [];
+  var para = [];
+  function flush() {
+    if (para.length) { blocks.push({ type: 'para', text: para.join(' ') }); para = []; }
+  }
+  while (i < lines.length) {
+    var line = lines[i];
+    var fence = line.match(/^\s*(```+|~~~+)\s*(\S*)/);
+    if (fence) {
+      flush();
+      var buf = [];
+      i++;
+      while (i < lines.length && lines[i].trimStart().indexOf(fence[1].slice(0, 3)) !== 0) {
+        buf.push(lines[i]); i++;
+      }
+      i++; // closing fence (or EOF)
+      blocks.push({ type: 'code', lang: fence[2] || '', text: buf.join('\n') });
+      continue;
+    }
+    if (!line.trim()) { flush(); i++; continue; }
+    var h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      flush();
+      blocks.push({ type: 'heading', level: h[1].length, text: h[2].replace(/\s*#+\s*$/, '') });
+      i++; continue;
+    }
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flush(); blocks.push({ type: 'hr' }); i++; continue; }
+    if (/^\s*\|/.test(line)) {
+      flush();
+      var tbuf = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) { tbuf.push(lines[i].trim()); i++; }
+      if (tbuf.length >= 2) { blocks.push({ type: 'table', lines: tbuf }); }
+      else { para.push(tbuf[0]); }
+      continue;
+    }
+    var q = line.match(/^\s*>+\s?(.*)$/);
+    if (q) {
+      flush();
+      var qbuf = [q[1]];
+      i++;
+      while (i < lines.length && /^\s*>/.test(lines[i])) {
+        qbuf.push(lines[i].replace(/^\s*>+\s?/, '')); i++;
+      }
+      blocks.push({ type: 'quote', text: qbuf.join(' ').trim() });
+      continue;
+    }
+    var li = line.match(/^\s*([-*+]|\d{1,3}[.)])\s+(.*)$/);
+    if (li) {
+      flush();
+      var items = [];
+      while (i < lines.length) {
+        var m = lines[i].match(/^\s*([-*+]|\d{1,3}[.)])\s+(.*)$/);
+        if (m) { items.push({ marker: /^\d/.test(m[1]) ? m[1] : '•', text: m[2] }); i++; }
+        else if (lines[i].trim() && /^\s{2,}/.test(lines[i]) && items.length) {
+          items[items.length - 1].text += ' ' + lines[i].trim(); i++;
+        }
+        else break;
+      }
+      blocks.push({ type: 'list', items: items });
+      continue;
+    }
+    para.push(line.trim());
+    i++;
+  }
+  flush();
+  return blocks;
+}
+
+// ---------------------------------------------------------------------------
+// Inline parser (shared by tokenizer and document renderer)
+// ---------------------------------------------------------------------------
+var INLINE_RE = /(`+)([\s\S]*?)\1|\*\*([\s\S]+?)\*\*|__([\s\S]+?)__|\*([^*\n]+?)\*|(?<![\w])_([^_\n]+?)_(?![\w])|!\[([^\]]*)\]\(([^)]*)\)|\[([^\]]+?)\]\(([^)]*)\)/g;
+
+function parseInline(text) {
+  var segs = [];
+  var last = 0, m;
+  INLINE_RE.lastIndex = 0;
+  while ((m = INLINE_RE.exec(text))) {
+    if (m.index > last) segs.push({ kind: 'plain', text: text.slice(last, m.index) });
+    if (m[2] !== undefined) segs.push({ kind: 'code', text: m[2] });
+    else if (m[3] !== undefined) segs.push({ kind: 'bold', text: m[3] });
+    else if (m[4] !== undefined) segs.push({ kind: 'bold', text: m[4] });
+    else if (m[5] !== undefined) segs.push({ kind: 'italic', text: m[5] });
+    else if (m[6] !== undefined) segs.push({ kind: 'italic', text: m[6] });
+    else if (m[7] !== undefined) { if (m[7]) segs.push({ kind: 'plain', text: m[7] }); }
+    else if (m[9] !== undefined) segs.push({ kind: 'link', text: m[9], url: m[10] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segs.push({ kind: 'plain', text: text.slice(last) });
+  return segs;
+}
+
+function plainText(text) {
+  return parseInline(text).map(function (s) { return s.text; }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Sentence-end detection (ported from the SpeedRead app's textProcessor)
+// ---------------------------------------------------------------------------
+var ABBR = new Set(['mr','mrs','ms','dr','prof','sr','jr','st','no','vs','etc','eg','ie','cf','al','et','inc','ltd','co','corp','fig','ch','pp','ed','est','approx','dept','jan','feb','mar','apr','jun','jul','aug','sep','sept','oct','nov','dec']);
+
+function isSentenceEnd(word) {
+  if (!/[.!?]["')\]]*$/.test(word)) return false;
+  var am = word.match(/^["'([]*([A-Za-z]+)\./);
+  if (am && ABBR.has(am[1].toLowerCase())) return false;
+  if (/^[A-Za-z]{1,3}\.([A-Za-z]{1,3}\.)+["')\]]*$/.test(word)) return false; // acronym
+  if (/^\W*\d[\d,]*\.\d+\W*$/.test(word)) return false;                       // decimal
+  if (/(\.{3}|…)["')\]]*$/.test(word)) return false;                          // ellipsis
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Tokenizer: blocks -> paced token stream + section index
+// ---------------------------------------------------------------------------
+function tokenize(blocks) {
+  var tokens = [];
+  var sections = [];
+
+  function pushWords(text, opts) {
+    var segs = parseInline(text);
+
+    // Assemble words across segment boundaries: "(`PORT`)" is one word, not
+    // three tokens. A new word starts only at real whitespace.
+    var raw = [];
+    var cur = null;
+    function commit() { if (cur && cur.text) raw.push(cur); cur = null; }
+    segs.forEach(function (s) {
+      if (!s.text) return;
+      s.text.split(/(\s+)/).forEach(function (p) {
+        if (!p) return;
+        if (/^\s+$/.test(p)) { commit(); return; }
+        if (!cur) cur = { t: 'word', text: '', bold: false, code: false, italic: false };
+        cur.text += p;
+        if (s.kind === 'bold') cur.bold = true;
+        else if (s.kind === 'code') cur.code = true;
+        else if (s.kind === 'italic') cur.italic = true;
+      });
+    });
+    commit();
+
+    // Punctuation-only fragments never flash alone: openers attach to the
+    // next word, everything else glues onto the previous one.
+    var words = [];
+    var pendingPre = '';
+    raw.forEach(function (w) {
+      if (!/[A-Za-z0-9]/.test(w.text)) {
+        if (/^[([{"'“‘¿¡«]+$/.test(w.text) || !words.length) pendingPre += w.text;
+        else words[words.length - 1].text += w.text;
+        return;
+      }
+      if (pendingPre) { w.text = pendingPre + w.text; pendingPre = ''; }
+      words.push(w);
+    });
+    if (pendingPre && words.length) words[words.length - 1].text += pendingPre;
+
+    words.forEach(function (w, j) {
+      w.sentEnd = isSentenceEnd(w.text);
+      var wt = 1;
+      var L = w.text.replace(/[^A-Za-z0-9]/g, '').length;
+      if (L > 7) wt += Math.min(0.5, (L - 7) * 0.05);
+      if (w.bold) wt *= 1.25;
+      if (w.code) wt *= 1.5;
+      else if (w.italic) wt *= 1.08;
+      w.w = wt;
+      if (j === 0 && opts.marker) w.pre = opts.marker + ' ';
+      if (j === words.length - 1) {
+        if (opts.end === 'para') w.paraEnd = true;
+        else if (opts.end === 'item') w.itemEnd = true;
+      }
+      tokens.push(w);
+    });
+  }
+
+  blocks.forEach(function (b) {
+    if (b.type === 'heading') {
+      var text = plainText(b.text);
+      sections.push({ tokIdx: tokens.length, level: b.level, text: text });
+      tokens.push({ t: 'heading', level: b.level, text: text });
+    } else if (b.type === 'para') {
+      pushWords(b.text, { end: 'para' });
+    } else if (b.type === 'quote') {
+      pushWords(b.text, { end: 'para', marker: '❝' });
+    } else if (b.type === 'list') {
+      b.items.forEach(function (it) { pushWords(it.text, { end: 'item', marker: it.marker }); });
+      var lastTok = tokens[tokens.length - 1];
+      if (lastTok && lastTok.t === 'word') { lastTok.itemEnd = false; lastTok.paraEnd = true; }
+    } else if (b.type === 'code' || b.type === 'table') {
+      tokens.push({ t: 'block', block: b });
+    } else if (b.type === 'hr') {
+      tokens.push({ t: 'hr' });
+    }
+  });
+
+  // Breadcrumb paths: maintain a heading stack per section
+  var stack = [];
+  sections.forEach(function (s) {
+    while (stack.length && stack[stack.length - 1].level >= s.level) stack.pop();
+    stack.push(s);
+    s.path = stack.map(function (x) { return x.text; }).join(' › ');
+  });
+
+  return { tokens: tokens, sections: sections };
+}
+
+// ---------------------------------------------------------------------------
+// ORP (Optimal Recognition Point) — same thresholds as the site
+// ---------------------------------------------------------------------------
+function orpIndex(len) {
+  if (len <= 1) return 0;
+  if (len <= 5) return 1;
+  if (len <= 9) return 2;
+  if (len <= 13) return 3;
+  return Math.floor(len / 4);
+}
+
+function splitORP(word) {
+  var s = -1, e = -1;
+  for (var i = 0; i < word.length; i++) {
+    if (/[A-Za-z0-9]/.test(word[i])) { if (s < 0) s = i; e = i; }
+  }
+  if (s < 0) return { pre: '', orp: word, suf: '' };
+  var lead = word.slice(0, s), core = word.slice(s, e + 1), trail = word.slice(e + 1);
+  var oi = orpIndex(core.length);
+  return { pre: lead + core.slice(0, oi), orp: core[oi] || '', suf: core.slice(oi + 1) + trail };
+}
+
+// ---------------------------------------------------------------------------
+// Preferences (same options and defaults as the site)
+// ---------------------------------------------------------------------------
+var PREF_KEY = 'srr:prefs:v2';
+// Single-quoted font names: these values are interpolated into inline
+// style="..." attributes, where a double quote would end the attribute.
+var FONTS = [
+  { name: 'JetBrains Mono', value: "'JetBrains Mono', monospace" },
+  { name: 'Fira Mono', value: "'Fira Mono', monospace" },
+  { name: 'Source Code Pro', value: "'Source Code Pro', monospace" },
+  { name: 'Inconsolata', value: "'Inconsolata', monospace" },
+  { name: 'IBM Plex Mono', value: "'IBM Plex Mono', monospace" }
+];
+var COLORS = [
+  { name: 'Red', value: '#EF4444' },
+  { name: 'Blue', value: '#3B82F6' },
+  { name: 'Green', value: '#22C55E' },
+  { name: 'Purple', value: '#A855F7' },
+  { name: 'Orange', value: '#F97316' },
+  { name: 'Pink', value: '#EC4899' }
+];
+var prefs = {
+  wpm: 300, fontSize: 80, pause: 2, letterSpacing: 0, focusPos: -5,
+  color: '#EF4444', font: FONTS[0].value, theme: null, showProgress: true
+};
+
+function loadPrefs() {
+  try {
+    var raw = localStorage.getItem(PREF_KEY);
+    if (raw) {
+      var p = JSON.parse(raw);
+      ['wpm', 'fontSize', 'pause', 'letterSpacing', 'focusPos'].forEach(function (k) {
+        if (typeof p[k] === 'number' && isFinite(p[k])) prefs[k] = p[k];
+      });
+      if (COLORS.some(function (c) { return c.value === p.color; })) prefs.color = p.color;
+      if (FONTS.some(function (f) { return f.value === p.font; })) prefs.font = p.font;
+      if (p.theme === 'dark' || p.theme === 'light') prefs.theme = p.theme;
+      if (typeof p.showProgress === 'boolean') prefs.showProgress = p.showProgress;
+    }
+  } catch (e) { /* localStorage unavailable on some file:// setups */ }
+}
+function savePrefs() {
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { /* ignore */ }
+}
+
+var SUN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
+var MOON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+var PLAY_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
+var PAUSE_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>';
+
+function applyTheme() {
+  var theme = prefs.theme || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.dataset.theme = theme;
+  document.getElementById('themeBtn').innerHTML = theme === 'dark' ? SUN : MOON;
+}
+
+// ---------------------------------------------------------------------------
+// Engine (setTimeout chain with WPM ramp, ported from useSpeedReader)
+// ---------------------------------------------------------------------------
+var tokens = [], sections = [], blocksParsed = [], wordsBefore = [];
+var nWords = 0;
+var idx = 0, rampStart = 0, timer = null;
+var playing = false, waiting = false;
+var RAMP_WORDS = 10;
+
+function clamp(x, a, b) { return Math.min(b, Math.max(a, x)); }
+function wpmToMs(wpm) { return 60000 / wpm; }
+function holdMult(level) { return level <= 1 ? 12 : level === 2 ? 9 : level === 3 ? 7 : 6; }
+
+function rampedWpm(i) {
+  var into = i - rampStart;
+  if (into >= RAMP_WORDS) return prefs.wpm;
+  var p = Math.max(0, into) / RAMP_WORDS;
+  var eased = 1 - (1 - p) * (1 - p);
+  var startW = prefs.wpm * 0.3;
+  return startW + (prefs.wpm - startW) * eased;
+}
+
+function endMult(tok) {
+  if (tok.paraEnd) return prefs.pause * 1.5;
+  if (tok.sentEnd) return prefs.pause;
+  if (tok.itemEnd) return 1.6;
+  return 1;
+}
+
+function clearTimer() { if (timer !== null) { clearTimeout(timer); timer = null; } }
+
+function scheduleCurrent() {
+  var tok = tokens[idx];
+  if (!tok) { finish(); return; }
+  renderToken(tok);
+  updateUI();
+  if (tok.t === 'block') { playing = false; waiting = true; updateUI(); return; }
+  var d;
+  if (tok.t === 'heading') {
+    d = clamp(wpmToMs(prefs.wpm) * holdMult(tok.level), 900, 3200);
+    rampStart = idx + 1;
+  } else if (tok.t === 'hr') {
+    d = wpmToMs(prefs.wpm) * 3;
+    rampStart = idx + 1;
+  } else {
+    d = wpmToMs(rampedWpm(idx)) * tok.w * endMult(tok);
+  }
+  timer = window.setTimeout(function () {
+    idx++;
+    if (idx >= tokens.length) finish();
+    else scheduleCurrent();
+  }, d);
+}
+
+function play() {
+  if (!tokens.length) return;
+  if (idx >= tokens.length) idx = 0;
+  rampStart = idx;
+  playing = true;
+  scheduleCurrent();
+}
+function pause() { clearTimer(); playing = false; renderCurrent(); updateUI(); }
+function toggle() { playing ? pause() : play(); }
+
+function continueBlock() {
+  waiting = false;
+  idx++;
+  rampStart = idx;
+  if (idx >= tokens.length) finish();
+  else { playing = true; scheduleCurrent(); }
+}
+
+function restart() {
+  clearTimer();
+  idx = 0; rampStart = 0; playing = false; waiting = false;
+  renderCurrent(); updateUI();
+}
+
+function finish() {
+  clearTimer();
+  playing = false; waiting = false;
+  idx = tokens.length;
+  renderCurrent(); updateUI();
+}
+
+function seekTo(i) {
+  clearTimer();
+  idx = clamp(i, 0, tokens.length - 1);
+  rampStart = idx;
+  waiting = false;
+  if (playing) scheduleCurrent();
+  else { renderCurrent(); updateUI(); }
+}
+
+function skipTokens(n) { if (tokens.length) seekTo(idx + n); }
+
+function jumpSection(dir) {
+  if (!sections.length) return;
+  var positions = sections.map(function (s) { return s.tokIdx; });
+  if (dir > 0) {
+    for (var i = 0; i < positions.length; i++) {
+      if (positions[i] > idx) { seekTo(positions[i]); return; }
+    }
+    finish();
+  } else {
+    var cur = 0;
+    for (var j = positions.length - 1; j >= 0; j--) {
+      if (positions[j] <= idx) { cur = j; break; }
+    }
+    // If we're just past the section start, go to the previous section instead
+    if (idx > positions[cur] + 1) seekTo(positions[cur]);
+    else seekTo(positions[Math.max(0, cur - 1)]);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+var stage = document.getElementById('stage');
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+function renderToken(tok) {
+  if (tok.t === 'word') {
+    var parts = splitORP(tok.text);
+    // Same geometry as the site's WordDisplay: fixed sides keep the ORP centered
+    var sideW = Math.max(300, prefs.fontSize * 6);
+    var pad = Math.max(8, prefs.fontSize * 0.15) + 4;
+    var style = 'font-size:' + prefs.fontSize + 'px;' +
+      'font-family:' + prefs.font + ';' +
+      'letter-spacing:' + prefs.letterSpacing + 'em;' +
+      'transform:translateX(' + prefs.focusPos + '%);' +
+      'padding:' + pad + 'px 0;' +
+      (tok.bold ? 'font-weight:700;' : '');
+    stage.innerHTML =
+      '<div class="word-row" style="' + style + '">' +
+      '<span class="side pre" style="width:' + sideW + 'px">' +
+      (tok.pre ? '<span class="marker">' + esc(tok.pre) + '</span>' : '') + esc(parts.pre) + '</span>' +
+      '<span style="color:' + prefs.color + '">' + esc(parts.orp) + '</span>' +
+      '<span class="side suf" style="width:' + sideW + 'px">' + esc(parts.suf) + '</span>' +
+      '</div>';
+  } else if (tok.t === 'heading') {
+    var hSize = prefs.fontSize * (tok.level <= 1 ? 0.78 : tok.level === 2 ? 0.68 : 0.6);
+    stage.innerHTML = '<div class="heading-tok" style="font-size:' + hSize + 'px;font-family:' + prefs.font + '">' + esc(tok.text) + '</div>';
+  } else if (tok.t === 'hr') {
+    stage.innerHTML = '<div class="hr-tok" style="font-size:' + (prefs.fontSize * 0.5) + 'px">· · ·</div>';
+  } else if (tok.t === 'block') {
+    var inner = tok.block.type === 'table'
+      ? renderTable(tok.block.lines)
+      : '<pre>' + esc(tok.block.text) + '</pre>';
+    stage.innerHTML = '<div class="block-tok">' + inner +
+      '<div class="block-hint">Space to continue</div></div>';
+    var panel = stage.querySelector('.block-tok');
+    panel.addEventListener('click', function (e) { e.stopPropagation(); });
+  }
+}
+
+function renderCurrent() {
+  if (!tokens.length) {
+    stage.innerHTML = '<span class="state-tok" style="font-size:' + (prefs.fontSize * 0.6) + 'px">Ready</span>';
+    return;
+  }
+  if (idx >= tokens.length) {
+    stage.innerHTML = '<span class="state-tok" style="font-size:' + (prefs.fontSize * 0.6) + 'px">Done!</span>';
+    return;
+  }
+  var tok = tokens[idx];
+  waiting = tok.t === 'block';
+  renderToken(tok);
+}
+
+// ---------------------------------------------------------------------------
+// Stats / chrome
+// ---------------------------------------------------------------------------
+function estimateSeconds(from) {
+  var ms = 0;
+  var base = wpmToMs(prefs.wpm);
+  for (var i = from; i < tokens.length; i++) {
+    var t = tokens[i];
+    if (t.t === 'heading') ms += clamp(base * holdMult(t.level), 900, 3200);
+    else if (t.t === 'hr') ms += base * 3;
+    else if (t.t === 'block') ms += 2500;
+    else ms += base * t.w * endMult(t);
+  }
+  return ms / 1000;
+}
+
+// Same formatting as the site's formatTime
+function fmtTime(seconds) {
+  if (seconds < 60) return Math.round(seconds) + 's';
+  var mins = Math.floor(seconds / 60);
+  var secs = Math.round(seconds % 60);
+  if (mins < 60) return secs > 0 ? mins + 'm ' + secs + 's' : mins + 'm';
+  var hours = Math.floor(mins / 60);
+  var rem = mins % 60;
+  return rem > 0 ? hours + 'h ' + rem + 'm' : hours + 'h';
+}
+
+function sectionPathAt(i) {
+  var path = '';
+  for (var j = sections.length - 1; j >= 0; j--) {
+    if (sections[j].tokIdx <= i) { path = sections[j].path; break; }
+  }
+  return path;
+}
+
+function wordOrdinal(i) { return wordsBefore[clamp(i, 0, tokens.length)] || 0; }
+
+var crumbEl = document.getElementById('crumb');
+var pausedFill = document.getElementById('pausedFill');
+var pausedText = document.getElementById('pausedText');
+var playFill = document.getElementById('playFill');
+var playCount = document.getElementById('playCount');
+var playBtn = document.getElementById('playBtn');
+var skiprow = document.getElementById('skiprow');
+var docTitle = 'Report';
+
+function updateUI() {
+  document.body.classList.toggle('playing', playing);
+  playBtn.innerHTML = (playing ? PAUSE_ICON + 'Pause' : PLAY_ICON + 'Play');
+  playBtn.title = playing ? 'Pause (Space)' : 'Play (Space)';
+
+  var pct = tokens.length ? (Math.min(idx, tokens.length) / tokens.length) * 100 : 0;
+  pausedFill.style.width = pct + '%';
+  playFill.style.width = pct + '%';
+
+  var hasStarted = idx > 0;
+  var isFinished = tokens.length > 0 && idx >= tokens.length;
+  skiprow.style.visibility = (!playing && hasStarted) ? 'visible' : 'hidden';
+
+  var path = sectionPathAt(Math.min(idx, tokens.length - 1));
+  crumbEl.textContent = path || docTitle;
+
+  var count = wordOrdinal(idx) + ' / ' + nWords + ' words';
+  var timeStr = '';
+  if (waiting) timeStr = 'Space to continue';
+  else if (isFinished) timeStr = 'Done!';
+  else if (nWords > 0) {
+    timeStr = hasStarted
+      ? fmtTime(estimateSeconds(idx)) + ' remaining'
+      : fmtTime(estimateSeconds(0)) + ' total';
+  }
+  pausedText.innerHTML = esc(count) + (timeStr ? '<span class="dot">•</span>' + esc(timeStr) : '');
+
+  playCount.textContent = count;
+  document.getElementById('playProgressWrap').style.display = prefs.showProgress ? 'flex' : 'none';
+}
+
+// ---------------------------------------------------------------------------
+// Document view
+// ---------------------------------------------------------------------------
+var docview = document.getElementById('docview');
+var docBuilt = false;
+
+function inlineHtml(text) {
+  return parseInline(text).map(function (s) {
+    if (s.kind === 'code') return '<code>' + esc(s.text) + '</code>';
+    if (s.kind === 'bold') return '<strong>' + esc(s.text) + '</strong>';
+    if (s.kind === 'italic') return '<em>' + esc(s.text) + '</em>';
+    if (s.kind === 'link') return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.text) + '</a>';
+    return esc(s.text);
+  }).join('');
+}
+
+function renderTable(tlines) {
+  var rows = tlines.map(function (l) {
+    return l.replace(/^\|/, '').replace(/\|$/, '').split('|').map(function (c) { return c.trim(); });
+  }).filter(function (cells) {
+    return !cells.every(function (c) { return /^:?-+:?$/.test(c); });
+  });
+  if (!rows.length) return '';
+  var html = '<table><thead><tr>';
+  rows[0].forEach(function (c) { html += '<th>' + inlineHtml(c) + '</th>'; });
+  html += '</tr></thead><tbody>';
+  rows.slice(1).forEach(function (r) {
+    html += '<tr>';
+    r.forEach(function (c) { html += '<td>' + inlineHtml(c) + '</td>'; });
+    html += '</tr>';
+  });
+  return html + '</tbody></table>';
+}
+
+function buildDoc() {
+  if (docBuilt) return;
+  var html = '';
+  blocksParsed.forEach(function (b) {
+    if (b.type === 'heading') html += '<h' + b.level + '>' + inlineHtml(b.text) + '</h' + b.level + '>';
+    else if (b.type === 'para') html += '<p>' + inlineHtml(b.text) + '</p>';
+    else if (b.type === 'quote') html += '<blockquote><p>' + inlineHtml(b.text) + '</p></blockquote>';
+    else if (b.type === 'list') {
+      var ordered = b.items.length && b.items[0].marker !== '•';
+      html += ordered ? '<ol>' : '<ul>';
+      b.items.forEach(function (it) { html += '<li>' + inlineHtml(it.text) + '</li>'; });
+      html += ordered ? '</ol>' : '</ul>';
+    }
+    else if (b.type === 'code') html += '<pre><code>' + esc(b.text) + '</code></pre>';
+    else if (b.type === 'table') html += renderTable(b.lines);
+    else if (b.type === 'hr') html += '<hr>';
+  });
+  document.getElementById('docbody').innerHTML = html;
+  docBuilt = true;
+}
+
+function toggleDoc() {
+  if (docview.hidden) {
+    if (playing) pause();
+    buildDoc();
+    docview.hidden = false;
+  } else {
+    docview.hidden = true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Settings wiring
+// ---------------------------------------------------------------------------
+function updateSliderFill(input) {
+  var v = parseFloat(input.value), min = parseFloat(input.min), max = parseFloat(input.max);
+  var pct = ((v - min) / (max - min)) * 100;
+  // Fire mode: the site turns the speed range orange above 1200 WPM
+  var fillColor = (input.id === 'wpmR' && v > 1200) ? '#f97316' : 'hsl(var(--primary))';
+  input.style.background = 'linear-gradient(to right, ' + fillColor + ' ' + pct + '%, hsl(var(--secondary)) ' + pct + '%)';
+}
+
+function bindSlider(id, valId, key, fmt) {
+  var r = document.getElementById(id), v = document.getElementById(valId);
+  r.value = prefs[key];
+  v.textContent = fmt(prefs[key]);
+  updateSliderFill(r);
+  r.addEventListener('input', function () {
+    prefs[key] = parseFloat(r.value);
+    v.textContent = fmt(prefs[key]);
+    updateSliderFill(r);
+    savePrefs();
+    if (!playing) { renderCurrent(); updateUI(); }
+  });
+}
+
+function buildSwatches() {
+  var wrap = document.getElementById('swatches');
+  wrap.innerHTML = '';
+  COLORS.forEach(function (c) {
+    var b = document.createElement('button');
+    b.className = 'swatch' + (prefs.color === c.value ? ' sel' : '');
+    b.style.backgroundColor = c.value;
+    b.title = c.name;
+    b.addEventListener('click', function () {
+      prefs.color = c.value;
+      savePrefs(); buildSwatches();
+      if (!playing) renderCurrent();
+    });
+    wrap.appendChild(b);
+  });
+}
+
+function buildFontButtons() {
+  var wrap = document.getElementById('fontbtns');
+  wrap.innerHTML = '';
+  FONTS.forEach(function (f) {
+    var b = document.createElement('button');
+    b.className = 'fontbtn' + (prefs.font === f.value ? ' sel' : '');
+    b.style.fontFamily = f.value;
+    b.textContent = f.name;
+    b.addEventListener('click', function () {
+      prefs.font = f.value;
+      savePrefs(); buildFontButtons();
+      if (!playing) renderCurrent();
+    });
+    wrap.appendChild(b);
+  });
+}
+
+function init() {
+  loadPrefs();
+  applyTheme();
+
+  var md = getMarkdown();
+  blocksParsed = parseBlocks(md);
+  var result = tokenize(blocksParsed);
+  tokens = result.tokens;
+  sections = result.sections;
+
+  // Prefix word counts for "x / y words" display
+  wordsBefore = [0];
+  tokens.forEach(function (t, i) {
+    wordsBefore[i + 1] = wordsBefore[i] + (t.t === 'word' ? 1 : 0);
+  });
+  nWords = wordsBefore[tokens.length];
+
+  var firstH1 = sections.find(function (s) { return s.level === 1; });
+  docTitle = firstH1 ? firstH1.text : (sections[0] ? sections[0].text : 'Report');
+  document.title = docTitle + ' — SpeedRead';
+
+  bindSlider('wpmR', 'wpmV', 'wpm', function (x) { return x + ' WPM'; });
+  bindSlider('fsR', 'fsV', 'fontSize', function (x) { return x + 'px'; });
+  bindSlider('pauseR', 'pauseV', 'pause', function (x) { return x + 'x'; });
+  bindSlider('lsR', 'lsV', 'letterSpacing', function (x) { return x.toFixed(2) + 'em'; });
+  bindSlider('fpR', 'fpV', 'focusPos', function (x) { return x + '%'; });
+  buildSwatches();
+  buildFontButtons();
+
+  var progSwitch = document.getElementById('progSwitch');
+  function renderSwitch() { progSwitch.classList.toggle('on', prefs.showProgress); progSwitch.setAttribute('aria-checked', prefs.showProgress); }
+  renderSwitch();
+  progSwitch.addEventListener('click', function () {
+    prefs.showProgress = !prefs.showProgress;
+    savePrefs(); renderSwitch(); updateUI();
+  });
+
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    var cur = document.documentElement.dataset.theme;
+    prefs.theme = cur === 'dark' ? 'light' : 'dark';
+    savePrefs(); applyTheme();
+  });
+
+  playBtn.addEventListener('click', function () { waiting ? continueBlock() : toggle(); });
+  document.getElementById('restartBtn').addEventListener('click', restart);
+  document.getElementById('docBtn').addEventListener('click', toggleDoc);
+  document.getElementById('closeDoc').addEventListener('click', toggleDoc);
+  document.getElementById('prevSec').addEventListener('click', function () { jumpSection(-1); });
+  document.getElementById('nextSec').addEventListener('click', function () { jumpSection(1); });
+  document.getElementById('back10').addEventListener('click', function () { skipTokens(-10); });
+  document.getElementById('back100').addEventListener('click', function () { skipTokens(-100); });
+
+  stage.addEventListener('click', function () { waiting ? continueBlock() : toggle(); });
+
+  window.addEventListener('keydown', function (e) {
+    var tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    if (!docview.hidden && e.code !== 'KeyD' && e.code !== 'Escape') return;
+    switch (e.code) {
+      case 'Space':
+        e.preventDefault();
+        waiting ? continueBlock() : toggle();
+        break;
+      case 'KeyR': e.preventDefault(); restart(); break;
+      case 'ArrowLeft': e.preventDefault(); jumpSection(-1); break;
+      case 'ArrowRight': e.preventDefault(); jumpSection(1); break;
+      case 'Comma': e.preventDefault(); skipTokens(-15); break;
+      case 'Period': e.preventDefault(); skipTokens(15); break;
+      case 'KeyD': e.preventDefault(); toggleDoc(); break;
+      case 'Escape':
+        e.preventDefault();
+        if (!docview.hidden) toggleDoc();
+        else if (playing) pause();
+        break;
+    }
+  });
+
+  renderCurrent();
+  updateUI();
+}
+
+init();
+</script>
+</body>
+</html>

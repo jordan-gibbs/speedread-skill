@@ -10,7 +10,7 @@ Heavy AI workflows produce more prose than anyone wants to scroll through — au
 
 The reader isn't a dumb word-flasher. It understands markdown structure:
 
-- **Headings** display whole, hold longer, and reset the speed ramp — sections become breathing units
+- **Headings** stream through the same anchor point in ALL CAPS and your focus color — a drum accent, not a full stop, so your eyes never have to refocus
 - A **breadcrumb** shows where you are; `←`/`→` jump between sections
 - **Bold** words run ~25% slower, `inline code` is held longer in monospace
 - **Code blocks and tables** stop the stream and display whole until you continue
@@ -62,7 +62,7 @@ python scripts/inject.py my-report.md --open
 | `D` | Toggle full document view |
 | `Esc` | Pause (or close document view) |
 
-Settings — speed (with 🔥 fire mode above 1200 WPM), font size, sentence pause, letter spacing, focus position, highlight color, five monospace fonts, dark mode — persist in `localStorage` between reports. A collapsible **Markdown Pacing** panel exposes the structural pacing rules too: heading hold, paragraph and list-item pauses, bold and code slowdown, and ramp-up length — all adjustable, all saved, one-click reset to defaults.
+Settings — speed (with 🔥 fire mode above 1200 WPM), font size, sentence pause, letter spacing, focus position, highlight color, five monospace fonts, dark mode — persist in `localStorage` between reports. A collapsible **Markdown Pacing** panel exposes the structural pacing rules too: heading slowdown, paragraph and list-item pauses, bold and code slowdown, and ramp-up length — all adjustable, all saved, one-click reset to defaults.
 
 ## Privacy
 

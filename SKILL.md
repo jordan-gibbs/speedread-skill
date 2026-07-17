@@ -5,7 +5,7 @@ description: Turn a markdown summary/report into a pop-up RSVP speed-reader the 
 
 # SpeedRead Report
 
-Produce a markdown report, ship it into the bundled `reader.html` template, and pop it open in the user's browser. The reader paces the text semantically: headings hold and reset the speed ramp, bold terms slow down, code blocks and tables pause the stream entirely.
+Produce a markdown report, ship it into the bundled `reader.html` template, and pop it open in the user's browser. The reader paces the text semantically: headings stream through in caps and the focus color, bold terms slow down, code blocks and tables pause the stream entirely.
 
 There are four steps. Do them all in one go — the user should ask once and see the reader open.
 
@@ -14,7 +14,7 @@ There are four steps. Do them all in one go — the user should ask once and see
 Write the report as a normal `.md` file, but author it for single-word streaming. These rules make the difference between a pleasant 500 WPM read and a wall of mush:
 
 - **Front-load conclusions.** TL;DR or verdict first, evidence after. The reader can bail out early.
-- **A `##` heading every 100–200 words.** Headings are the reader's pause points and its navigation targets (←/→ jump by section). Use `###` for sub-points. Exactly one `#` title at the top — it becomes the document title.
+- **A `##` heading every 100–200 words.** Headings are the reader's section cues and its navigation targets (←/→ jump by section). Use `###` for sub-points. Exactly one `#` title at the top — it becomes the document title.
 - **Short sentences.** Under ~20 words. Sentence-end pauses are the reader's rhythm; long sentences starve it.
 - **Bold the load-bearing tokens.** Key numbers, names, verdicts: `**43% regression**`. The reader slows ~25% on bold words and the user's eye catches them.
 - **Bullets over dense prose** for enumerable facts. Each item gets its own end-pause.

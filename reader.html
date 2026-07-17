@@ -117,9 +117,6 @@
   .side.suf { text-align: left; color: hsl(var(--foreground)); }
   .marker { color: hsl(var(--muted-foreground)); }
   .state-tok { font-weight: 500; color: hsl(var(--muted-foreground)); }
-  .heading-tok {
-    font-weight: 700; text-align: center; max-width: 82vw; line-height: 1.25;
-  }
   .hr-tok { color: hsl(var(--muted-foreground)); letter-spacing: .4em; }
 
   .block-tok {
@@ -439,11 +436,11 @@ var DEMO = [
   "",
   "This file was opened without injected content, so you are reading the built-in demo. Your agent normally replaces this with a **report it wrote for you**.",
   "",
-  "Press **Space** or click the word to start. The reader slows for headings, holds on **bold terms**, pauses at sentence ends, and stops entirely on code blocks and tables so you can inspect them.",
+  "Press **Space** or click the word to start. Headings stream through in CAPS and your focus color, the reader holds on **bold terms**, pauses at sentence ends, and stops entirely on code blocks and tables so you can inspect them.",
   "",
   "## What gets special pacing",
   "",
-  "- Headings display whole, then reset the speed ramp",
+  "- Headings flow word-by-word in caps and color, slightly slower",
   "- **Bold text** runs about 25 percent slower",
   "- `inline code` is held longer and shown in monospace",
   "- List items get a short pause at the end of each bullet",
@@ -660,6 +657,7 @@ function tokenize(blocks) {
       var L = w.text.replace(/[^A-Za-z0-9]/g, '').length;
       if (L > 7) wt += Math.min(0.5, (L - 7) * 0.05);
       w.w = wt;
+      if (opts.head) w.head = opts.head;
       if (j === 0 && opts.marker) w.pre = opts.marker + ' ';
       if (j === words.length - 1) {
         if (opts.end === 'para') w.paraEnd = true;
@@ -671,9 +669,11 @@ function tokenize(blocks) {
 
   blocks.forEach(function (b) {
     if (b.type === 'heading') {
-      var text = plainText(b.text);
-      sections.push({ tokIdx: tokens.length, level: b.level, text: text });
-      tokens.push({ t: 'heading', level: b.level, text: text });
+      // Headings flow through the ORP stream like words (CAPS, focus color,
+      // slightly slower) so the eye never leaves the anchor point. The
+      // paragraph-end pause on the last word gives a beat before the body.
+      sections.push({ tokIdx: tokens.length, level: b.level, text: plainText(b.text) });
+      pushWords(b.text, { end: 'para', head: b.level });
     } else if (b.type === 'para') {
       pushWords(b.text, { end: 'para' });
     } else if (b.type === 'quote') {
@@ -746,7 +746,7 @@ var COLORS = [
 // Markdown pacing knobs — how the reader treats document structure.
 // Defaults match the tuned constants; every one is user-adjustable and saved.
 var PACING = [
-  { key: 'headingHold', label: 'Heading Hold', min: 0.25, max: 2.5, step: 0.05, def: 1, unit: 'x' },
+  { key: 'headSlow', label: 'Heading Slowdown', min: 1, max: 2.5, step: 0.05, def: 1.4, unit: 'x' },
   { key: 'paraPause', label: 'Paragraph Pause', min: 1, max: 3, step: 0.1, def: 1.5, unit: 'x' },
   { key: 'itemPause', label: 'List Item Pause', min: 1, max: 3, step: 0.1, def: 1.6, unit: 'x' },
   { key: 'boldSlow', label: 'Bold Slowdown', min: 1, max: 2, step: 0.05, def: 1.25, unit: 'x' },
@@ -804,11 +804,6 @@ var playing = false, waiting = false;
 function clamp(x, a, b) { return Math.min(b, Math.max(a, x)); }
 function wpmToMs(wpm) { return 60000 / wpm; }
 
-function headingHoldMs(level) {
-  var mult = level <= 1 ? 12 : level === 2 ? 9 : level === 3 ? 7 : 6;
-  return clamp(wpmToMs(prefs.wpm) * mult * prefs.headingHold, 350, 4500);
-}
-
 function rampedWpm(i) {
   var into = i - rampStart;
   if (prefs.rampWords <= 0 || into >= prefs.rampWords) return prefs.wpm;
@@ -826,6 +821,7 @@ function endMult(tok) {
 }
 
 function emphMult(tok) {
+  if (tok.head) return prefs.headSlow;
   if (tok.code) return prefs.codeSlow;
   if (tok.bold) return prefs.boldSlow;
   if (tok.italic) return 1.08;
@@ -841,12 +837,10 @@ function scheduleCurrent() {
   updateUI();
   if (tok.t === 'block') { playing = false; waiting = true; updateUI(); return; }
   var d;
-  if (tok.t === 'heading') {
-    d = headingHoldMs(tok.level);
-    rampStart = idx + 1;
-  } else if (tok.t === 'hr') {
+  // The ramp only resets on play/resume/seek/block-continue — never mid-flow,
+  // so section changes keep the reading rhythm.
+  if (tok.t === 'hr') {
     d = wpmToMs(prefs.wpm) * 3;
-    rampStart = idx + 1;
   } else {
     d = wpmToMs(rampedWpm(idx)) * tok.w * emphMult(tok) * endMult(tok);
   }
@@ -931,7 +925,9 @@ function esc(s) {
 
 function renderToken(tok) {
   if (tok.t === 'word') {
-    var parts = splitORP(tok.text);
+    // Heading words keep the exact same ORP geometry — the eye stays on the
+    // anchor — but read as structure: ALL CAPS, bold, full focus color.
+    var parts = splitORP(tok.head ? tok.text.toUpperCase() : tok.text);
     // Same geometry as the site's WordDisplay: fixed sides keep the ORP centered
     var sideW = Math.max(300, prefs.fontSize * 6);
     var pad = Math.max(8, prefs.fontSize * 0.15) + 4;
@@ -940,17 +936,15 @@ function renderToken(tok) {
       'letter-spacing:' + prefs.letterSpacing + 'em;' +
       'transform:translateX(' + prefs.focusPos + '%);' +
       'padding:' + pad + 'px 0;' +
-      (tok.bold ? 'font-weight:700;' : '');
+      (tok.bold || tok.head ? 'font-weight:700;' : '');
+    var sideStyle = tok.head ? ';color:' + prefs.color : '';
     stage.innerHTML =
       '<div class="word-row" style="' + style + '">' +
-      '<span class="side pre" style="width:' + sideW + 'px">' +
+      '<span class="side pre" style="width:' + sideW + 'px' + sideStyle + '">' +
       (tok.pre ? '<span class="marker">' + esc(tok.pre) + '</span>' : '') + esc(parts.pre) + '</span>' +
       '<span style="color:' + prefs.color + '">' + esc(parts.orp) + '</span>' +
-      '<span class="side suf" style="width:' + sideW + 'px">' + esc(parts.suf) + '</span>' +
+      '<span class="side suf" style="width:' + sideW + 'px' + sideStyle + '">' + esc(parts.suf) + '</span>' +
       '</div>';
-  } else if (tok.t === 'heading') {
-    var hSize = prefs.fontSize * (tok.level <= 1 ? 0.78 : tok.level === 2 ? 0.68 : 0.6);
-    stage.innerHTML = '<div class="heading-tok" style="font-size:' + hSize + 'px;font-family:' + prefs.font + '">' + esc(tok.text) + '</div>';
   } else if (tok.t === 'hr') {
     stage.innerHTML = '<div class="hr-tok" style="font-size:' + (prefs.fontSize * 0.5) + 'px">· · ·</div>';
   } else if (tok.t === 'block') {
@@ -986,8 +980,7 @@ function estimateSeconds(from) {
   var base = wpmToMs(prefs.wpm);
   for (var i = from; i < tokens.length; i++) {
     var t = tokens[i];
-    if (t.t === 'heading') ms += headingHoldMs(t.level);
-    else if (t.t === 'hr') ms += base * 3;
+    if (t.t === 'hr') ms += base * 3;
     else if (t.t === 'block') ms += 2500;
     else ms += base * t.w * emphMult(t) * endMult(t);
   }

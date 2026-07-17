@@ -4,9 +4,9 @@
 
 ![MIT license](https://img.shields.io/badge/license-MIT-green) ![zero dependencies](https://img.shields.io/badge/dependencies-none-blue)
 
-![Demo of the SpeedRead reader](assets/demo.gif)
+<!-- demo video: drag demo-video.mp4 into this file in the GitHub editor and the attachment link will land here -->
 
-Heavy AI workflows produce more prose than anyone wants to scroll through — audit reports, research summaries, migration writeups. This skill closes the loop: your coding agent writes the report as markdown, injects it into a single self-contained HTML file, and pops it open in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader. One word at a time, fixed focal point, 300–1600 WPM. Most people comfortably double their reading speed within a session or two.
+Heavy AI workflows produce more prose than anyone wants to scroll through — audit reports, research summaries, migration writeups. This skill closes the loop: your coding agent writes the report as markdown, injects it into a single self-contained HTML file, and pops it open in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader. One word at a time, fixed focal point, 100–1600 WPM (500 out of the box). Most people comfortably double their reading speed within a session or two.
 
 The reader isn't a dumb word-flasher. It understands markdown structure:
 
@@ -80,3 +80,7 @@ Issues and PRs welcome. The whole reader lives in one file (`reader.html`) on pu
 ## License
 
 [MIT](LICENSE)
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=jordan-gibbs/speedread-skill&type=Date)](https://star-history.com/#jordan-gibbs/speedread-skill&Date)

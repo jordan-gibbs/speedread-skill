@@ -743,11 +743,11 @@ var PACING = [
   { key: 'itemPause', label: 'List Item Pause', min: 1, max: 3, step: 0.1, def: 1.6, unit: 'x' },
   { key: 'boldSlow', label: 'Bold Slowdown', min: 1, max: 2, step: 0.05, def: 1.25, unit: 'x' },
   { key: 'codeSlow', label: 'Code Slowdown', min: 1, max: 2.5, step: 0.05, def: 1.5, unit: 'x' },
-  { key: 'rampWords', label: 'Ramp-Up Length', min: 0, max: 30, step: 1, def: 10, unit: ' words' }
+  { key: 'rampWords', label: 'Ramp-Up Length', min: 0, max: 50, step: 1, def: 25, unit: ' words' }
 ];
 
 var prefs = {
-  wpm: 300, fontSize: 80, pause: 2, letterSpacing: 0, focusPos: -5,
+  wpm: 500, fontSize: 80, pause: 2, letterSpacing: 0, focusPos: -5,
   color: '#EF4444', font: FONTS[0].value, theme: null, showProgress: true
 };
 PACING.forEach(function (p) { prefs[p.key] = p.def; });

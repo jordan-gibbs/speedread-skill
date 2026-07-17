@@ -217,6 +217,18 @@
   .fontbtn:hover { background: hsl(var(--secondary) / .8); }
   .fontbtn.sel { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); }
 
+  /* markdown pacing (collapsible) */
+  #mdpacing { border-top: 1px solid hsl(var(--border)); padding-top: 20px; }
+  #mdpacing summary {
+    cursor: pointer; font-size: 14px; color: hsl(var(--muted-foreground));
+    user-select: none; list-style: none; display: flex; align-items: center; gap: 8px;
+  }
+  #mdpacing summary::-webkit-details-marker { display: none; }
+  #mdpacing summary::before { content: '▸'; font-size: 11px; transition: transform .15s; }
+  #mdpacing[open] summary::before { transform: rotate(90deg); }
+  #mdpacing .grid2 { margin-top: 20px; }
+  #pacingReset { margin-top: 20px; height: 36px; padding: 0 14px; font-size: 13px; }
+
   /* credit */
   #credit {
     text-align: center; font-size: 12px;
@@ -371,6 +383,12 @@
         <div class="ctl-head"><span class="ctl-label">Font</span></div>
         <div class="fontbtns" id="fontbtns"></div>
       </div>
+
+      <details id="mdpacing">
+        <summary>Markdown Pacing</summary>
+        <div class="grid2" id="pacingGrid"></div>
+        <button class="btn-outline" id="pacingReset">Reset to defaults</button>
+      </details>
     </div>
 
     <div id="hints">
@@ -633,12 +651,11 @@ function tokenize(blocks) {
 
     words.forEach(function (w, j) {
       w.sentEnd = isSentenceEnd(w.text);
+      // Length scaling only — emphasis slowdown is applied at schedule time
+      // so the pacing sliders take effect live.
       var wt = 1;
       var L = w.text.replace(/[^A-Za-z0-9]/g, '').length;
       if (L > 7) wt += Math.min(0.5, (L - 7) * 0.05);
-      if (w.bold) wt *= 1.25;
-      if (w.code) wt *= 1.5;
-      else if (w.italic) wt *= 1.08;
       w.w = wt;
       if (j === 0 && opts.marker) w.pre = opts.marker + ' ';
       if (j === words.length - 1) {
@@ -723,17 +740,32 @@ var COLORS = [
   { name: 'Orange', value: '#F97316' },
   { name: 'Pink', value: '#EC4899' }
 ];
+// Markdown pacing knobs — how the reader treats document structure.
+// Defaults match the tuned constants; every one is user-adjustable and saved.
+var PACING = [
+  { key: 'headingHold', label: 'Heading Hold', min: 0.25, max: 2.5, step: 0.05, def: 1, unit: 'x' },
+  { key: 'paraPause', label: 'Paragraph Pause', min: 1, max: 3, step: 0.1, def: 1.5, unit: 'x' },
+  { key: 'itemPause', label: 'List Item Pause', min: 1, max: 3, step: 0.1, def: 1.6, unit: 'x' },
+  { key: 'boldSlow', label: 'Bold Slowdown', min: 1, max: 2, step: 0.05, def: 1.25, unit: 'x' },
+  { key: 'codeSlow', label: 'Code Slowdown', min: 1, max: 2.5, step: 0.05, def: 1.5, unit: 'x' },
+  { key: 'rampWords', label: 'Ramp-Up Length', min: 0, max: 30, step: 1, def: 10, unit: ' words' }
+];
+
 var prefs = {
   wpm: 300, fontSize: 80, pause: 2, letterSpacing: 0, focusPos: -5,
   color: '#EF4444', font: FONTS[0].value, theme: null, showProgress: true
 };
+PACING.forEach(function (p) { prefs[p.key] = p.def; });
+
+var NUMERIC_PREFS = ['wpm', 'fontSize', 'pause', 'letterSpacing', 'focusPos']
+  .concat(PACING.map(function (p) { return p.key; }));
 
 function loadPrefs() {
   try {
     var raw = localStorage.getItem(PREF_KEY);
     if (raw) {
       var p = JSON.parse(raw);
-      ['wpm', 'fontSize', 'pause', 'letterSpacing', 'focusPos'].forEach(function (k) {
+      NUMERIC_PREFS.forEach(function (k) {
         if (typeof p[k] === 'number' && isFinite(p[k])) prefs[k] = p[k];
       });
       if (COLORS.some(function (c) { return c.value === p.color; })) prefs.color = p.color;
@@ -765,25 +797,35 @@ var tokens = [], sections = [], blocksParsed = [], wordsBefore = [];
 var nWords = 0;
 var idx = 0, rampStart = 0, timer = null;
 var playing = false, waiting = false;
-var RAMP_WORDS = 10;
 
 function clamp(x, a, b) { return Math.min(b, Math.max(a, x)); }
 function wpmToMs(wpm) { return 60000 / wpm; }
-function holdMult(level) { return level <= 1 ? 12 : level === 2 ? 9 : level === 3 ? 7 : 6; }
+
+function headingHoldMs(level) {
+  var mult = level <= 1 ? 12 : level === 2 ? 9 : level === 3 ? 7 : 6;
+  return clamp(wpmToMs(prefs.wpm) * mult * prefs.headingHold, 350, 4500);
+}
 
 function rampedWpm(i) {
   var into = i - rampStart;
-  if (into >= RAMP_WORDS) return prefs.wpm;
-  var p = Math.max(0, into) / RAMP_WORDS;
+  if (prefs.rampWords <= 0 || into >= prefs.rampWords) return prefs.wpm;
+  var p = Math.max(0, into) / prefs.rampWords;
   var eased = 1 - (1 - p) * (1 - p);
   var startW = prefs.wpm * 0.3;
   return startW + (prefs.wpm - startW) * eased;
 }
 
 function endMult(tok) {
-  if (tok.paraEnd) return prefs.pause * 1.5;
+  if (tok.paraEnd) return prefs.pause * prefs.paraPause;
   if (tok.sentEnd) return prefs.pause;
-  if (tok.itemEnd) return 1.6;
+  if (tok.itemEnd) return prefs.itemPause;
+  return 1;
+}
+
+function emphMult(tok) {
+  if (tok.code) return prefs.codeSlow;
+  if (tok.bold) return prefs.boldSlow;
+  if (tok.italic) return 1.08;
   return 1;
 }
 
@@ -797,13 +839,13 @@ function scheduleCurrent() {
   if (tok.t === 'block') { playing = false; waiting = true; updateUI(); return; }
   var d;
   if (tok.t === 'heading') {
-    d = clamp(wpmToMs(prefs.wpm) * holdMult(tok.level), 900, 3200);
+    d = headingHoldMs(tok.level);
     rampStart = idx + 1;
   } else if (tok.t === 'hr') {
     d = wpmToMs(prefs.wpm) * 3;
     rampStart = idx + 1;
   } else {
-    d = wpmToMs(rampedWpm(idx)) * tok.w * endMult(tok);
+    d = wpmToMs(rampedWpm(idx)) * tok.w * emphMult(tok) * endMult(tok);
   }
   timer = window.setTimeout(function () {
     idx++;
@@ -941,10 +983,10 @@ function estimateSeconds(from) {
   var base = wpmToMs(prefs.wpm);
   for (var i = from; i < tokens.length; i++) {
     var t = tokens[i];
-    if (t.t === 'heading') ms += clamp(base * holdMult(t.level), 900, 3200);
+    if (t.t === 'heading') ms += headingHoldMs(t.level);
     else if (t.t === 'hr') ms += base * 3;
     else if (t.t === 'block') ms += 2500;
-    else ms += base * t.w * endMult(t);
+    else ms += base * t.w * emphMult(t) * endMult(t);
   }
   return ms / 1000;
 }
@@ -1117,6 +1159,45 @@ function buildSwatches() {
   });
 }
 
+function fmtPacing(p, v) {
+  var n = p.step >= 1 ? String(v) : String(Math.round(v * 100) / 100);
+  return n + p.unit;
+}
+
+function buildPacing() {
+  var grid = document.getElementById('pacingGrid');
+  grid.innerHTML = '';
+  PACING.forEach(function (p) {
+    var wrap = document.createElement('div');
+    wrap.className = 'ctl';
+    wrap.innerHTML =
+      '<div class="ctl-head"><span class="ctl-label">' + p.label + '</span><span class="ctl-val"></span></div>';
+    var input = document.createElement('input');
+    input.type = 'range';
+    input.min = p.min; input.max = p.max; input.step = p.step;
+    input.value = prefs[p.key];
+    wrap.appendChild(input);
+    var minmax = document.createElement('div');
+    minmax.className = 'ctl-minmax';
+    minmax.innerHTML = '<span>' + fmtPacing(p, p.min) + '</span><span>' + fmtPacing(p, p.max) + '</span>';
+    wrap.appendChild(minmax);
+    var val = wrap.querySelector('.ctl-val');
+    function refresh() {
+      val.textContent = fmtPacing(p, prefs[p.key]);
+      input.value = prefs[p.key];
+      updateSliderFill(input);
+    }
+    refresh();
+    input.addEventListener('input', function () {
+      prefs[p.key] = parseFloat(input.value);
+      refresh();
+      savePrefs();
+      if (!playing) updateUI();
+    });
+    grid.appendChild(wrap);
+  });
+}
+
 function buildFontButtons() {
   var wrap = document.getElementById('fontbtns');
   wrap.innerHTML = '';
@@ -1162,6 +1243,14 @@ function init() {
   bindSlider('fpR', 'fpV', 'focusPos', function (x) { return x + '%'; });
   buildSwatches();
   buildFontButtons();
+  buildPacing();
+
+  document.getElementById('pacingReset').addEventListener('click', function () {
+    PACING.forEach(function (p) { prefs[p.key] = p.def; });
+    savePrefs();
+    buildPacing();
+    updateUI();
+  });
 
   var progSwitch = document.getElementById('progSwitch');
   function renderSwitch() { progSwitch.classList.toggle('on', prefs.showProgress); progSwitch.setAttribute('aria-checked', prefs.showProgress); }

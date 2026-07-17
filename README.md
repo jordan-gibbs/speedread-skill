@@ -62,7 +62,7 @@ python scripts/inject.py my-report.md --open
 | `D` | Toggle full document view |
 | `Esc` | Pause (or close document view) |
 
-Settings — speed (with 🔥 fire mode above 1200 WPM), font size, sentence pause, letter spacing, focus position, highlight color, five monospace fonts, dark mode — persist in `localStorage` between reports.
+Settings — speed (with 🔥 fire mode above 1200 WPM), font size, sentence pause, letter spacing, focus position, highlight color, five monospace fonts, dark mode — persist in `localStorage` between reports. A collapsible **Markdown Pacing** panel exposes the structural pacing rules too: heading hold, paragraph and list-item pauses, bold and code slowdown, and ramp-up length — all adjustable, all saved, one-click reset to defaults.
 
 ## Privacy
 

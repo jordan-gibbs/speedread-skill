@@ -59,7 +59,7 @@ pathlib.Path("report.speedread.html").write_text(
 
 After opening, give the user a one-line recap of the controls:
 
-> Space = play/pause · ← → = jump sections · , . = ±15 words · R = restart · D = full document view · click the word to play/pause. All settings (speed, font size, sentence pause, letter spacing, focus position, highlight color, font, dark mode) save automatically in your browser.
+> Space = play/pause · ← → = jump sections · , . = ±15 words · R = restart · D = full document view · click the word to play/pause. All settings (speed, font size, sentence pause, letter spacing, focus position, highlight color, font, dark mode, and the Markdown Pacing panel for heading/paragraph/list/bold/code timing) save automatically in your browser.
 
 ## Notes
 

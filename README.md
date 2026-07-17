@@ -12,6 +12,7 @@ The reader isn't a dumb word-flasher. It understands markdown structure:
 
 - **Headings** stream through the same anchor point in ALL CAPS and your focus color — a drum accent, not a full stop, so your eyes never have to refocus
 - `←`/`→` jump between sections; `,`/`.` nudge by 15 words
+- A **time saved** readout — per report at your current speed, plus an all-time counter vs the average reader (238 WPM)
 - **Bold** words run ~25% slower, `inline code` is held longer in monospace
 - **Code blocks and tables** stop the stream and display whole until you continue
 - Lists, paragraphs, and long words all get their own pause rules

@@ -133,6 +133,8 @@
   #pausedBar { height: 12px; }
   #pausedText { text-align: center; color: hsl(var(--muted-foreground)); font-size: 16px; }
   #pausedText .dot { margin: 0 8px; }
+  #savedText { text-align: center; color: hsl(var(--muted-foreground)); font-size: 13px; opacity: .85; }
+  #savedText:empty { display: none; }
 
   /* ---- controls (site: back/restart/play + skip row) ---- */
   #controls { display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -219,7 +221,13 @@
   #mdpacing .grid2 { margin-top: 20px; }
   #pacingReset { margin-top: 20px; height: 36px; padding: 0 14px; font-size: 13px; }
 
-  /* credit */
+  /* footer: all-time savings + credit */
+  #globalSaved {
+    text-align: center; font-size: 13px;
+    color: hsl(var(--muted-foreground));
+    margin-top: -16px;
+  }
+  #globalSaved:empty { display: none; }
   #credit {
     text-align: center; font-size: 12px;
     color: hsl(var(--muted-foreground)); opacity: .7;
@@ -297,6 +305,7 @@
     <div id="pausedProgress">
       <div class="bar" id="pausedBar"><div class="bar-fill" id="pausedFill"></div></div>
       <div id="pausedText"></div>
+      <div id="savedText"></div>
     </div>
 
     <div id="controls">
@@ -388,6 +397,7 @@
       <div class="mobile">Tap the word to play/pause</div>
     </div>
 
+    <div id="globalSaved"></div>
     <div id="credit">Powered by <a href="https://speedread.life" target="_blank" rel="noopener">speedread.life</a></div>
   </div></main>
 
@@ -764,6 +774,25 @@ function savePrefs() {
   try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch (e) { /* ignore */ }
 }
 
+// ---------------------------------------------------------------------------
+// Reading stats — lifetime words read and time spent, for "time saved" vs
+// the average adult silent-reading speed.
+// ---------------------------------------------------------------------------
+var STATS_KEY = 'srr:stats:v1';
+var AVG_WPM = 238;
+var stats = { wordsRead: 0, msRead: 0 };
+
+function loadStats() {
+  try {
+    var s = JSON.parse(localStorage.getItem(STATS_KEY) || '{}');
+    if (typeof s.wordsRead === 'number' && isFinite(s.wordsRead)) stats.wordsRead = s.wordsRead;
+    if (typeof s.msRead === 'number' && isFinite(s.msRead)) stats.msRead = s.msRead;
+  } catch (e) { /* ignore */ }
+}
+function saveStats() {
+  try { localStorage.setItem(STATS_KEY, JSON.stringify(stats)); } catch (e) { /* ignore */ }
+}
+
 var SUN = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>';
 var MOON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
 var PLAY_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>';
@@ -830,6 +859,11 @@ function scheduleCurrent() {
     d = wpmToMs(rampedWpm(idx)) * tok.w * emphMult(tok) * endMult(tok);
   }
   timer = window.setTimeout(function () {
+    if (tok.t === 'word') {
+      stats.wordsRead++;
+      stats.msRead += d;
+      if (stats.wordsRead % 25 === 0) saveStats();
+    }
     idx++;
     if (idx >= tokens.length) finish();
     else scheduleCurrent();
@@ -843,7 +877,7 @@ function play() {
   playing = true;
   scheduleCurrent();
 }
-function pause() { clearTimer(); playing = false; renderCurrent(); updateUI(); }
+function pause() { clearTimer(); playing = false; saveStats(); renderCurrent(); updateUI(); }
 function toggle() { playing ? pause() : play(); }
 
 function continueBlock() {
@@ -864,6 +898,7 @@ function finish() {
   clearTimer();
   playing = false; waiting = false;
   idx = tokens.length;
+  saveStats();
   renderCurrent(); updateUI();
 }
 
@@ -984,10 +1019,20 @@ function fmtTime(seconds) {
   return rem > 0 ? hours + 'h ' + rem + 'm' : hours + 'h';
 }
 
+// Long-horizon variant for the all-time counter (adds days)
+function fmtLong(seconds) {
+  if (seconds < 86400) return fmtTime(seconds);
+  var days = Math.floor(seconds / 86400);
+  var hours = Math.round((seconds % 86400) / 3600);
+  return hours > 0 ? days + 'd ' + hours + 'h' : days + 'd';
+}
+
 function wordOrdinal(i) { return wordsBefore[clamp(i, 0, tokens.length)] || 0; }
 
 var pausedFill = document.getElementById('pausedFill');
 var pausedText = document.getElementById('pausedText');
+var savedText = document.getElementById('savedText');
+var globalSaved = document.getElementById('globalSaved');
 var playFill = document.getElementById('playFill');
 var playCount = document.getElementById('playCount');
 var playBtn = document.getElementById('playBtn');
@@ -1017,6 +1062,15 @@ function updateUI() {
       : fmtTime(estimateSeconds(0)) + ' total';
   }
   pausedText.innerHTML = esc(count) + (timeStr ? '<span class="dot">•</span>' + esc(timeStr) : '');
+
+  // Time saved vs the average reader: per document at the current settings,
+  // and lifetime from actual reading. Both hide when there's nothing to brag about.
+  var docSaved = nWords > 0 ? nWords * 60 / AVG_WPM - estimateSeconds(0) : 0;
+  savedText.textContent = docSaved >= 1
+    ? 'Saves ' + fmtTime(docSaved) + ' vs the average reader (' + AVG_WPM + ' WPM)' : '';
+  var lifeSaved = (stats.wordsRead * 60000 / AVG_WPM - stats.msRead) / 1000;
+  globalSaved.textContent = lifeSaved >= 1
+    ? fmtLong(lifeSaved) + ' saved all-time vs average reading speed' : '';
 
   playCount.textContent = count;
   document.getElementById('playProgressWrap').style.display = prefs.showProgress ? 'flex' : 'none';
@@ -1187,6 +1241,8 @@ function buildFontButtons() {
 
 function init() {
   loadPrefs();
+  loadStats();
+  window.addEventListener('beforeunload', saveStats);
   applyTheme();
 
   var md = getMarkdown();

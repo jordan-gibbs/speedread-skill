@@ -926,7 +926,8 @@ function esc(s) {
 function renderToken(tok) {
   if (tok.t === 'word') {
     // Heading words keep the exact same ORP geometry — the eye stays on the
-    // anchor — but read as structure: ALL CAPS, bold, full focus color.
+    // anchor — but read as structure: ALL CAPS, bold, sides in the focus
+    // color with the anchor letter inverted to the text color so it pops.
     var parts = splitORP(tok.head ? tok.text.toUpperCase() : tok.text);
     // Same geometry as the site's WordDisplay: fixed sides keep the ORP centered
     var sideW = Math.max(300, prefs.fontSize * 6);
@@ -942,7 +943,7 @@ function renderToken(tok) {
       '<div class="word-row" style="' + style + '">' +
       '<span class="side pre" style="width:' + sideW + 'px' + sideStyle + '">' +
       (tok.pre ? '<span class="marker">' + esc(tok.pre) + '</span>' : '') + esc(parts.pre) + '</span>' +
-      '<span style="color:' + prefs.color + '">' + esc(parts.orp) + '</span>' +
+      '<span style="color:' + (tok.head ? 'hsl(var(--foreground))' : prefs.color) + '">' + esc(parts.orp) + '</span>' +
       '<span class="side suf" style="width:' + sideW + 'px' + sideStyle + '">' + esc(parts.suf) + '</span>' +
       '</div>';
   } else if (tok.t === 'hr') {

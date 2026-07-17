@@ -11,7 +11,7 @@ Heavy AI workflows produce more prose than anyone wants to scroll through — au
 The reader isn't a dumb word-flasher. It understands markdown structure:
 
 - **Headings** stream through the same anchor point in ALL CAPS and your focus color — a drum accent, not a full stop, so your eyes never have to refocus
-- A **breadcrumb** shows where you are; `←`/`→` jump between sections
+- `←`/`→` jump between sections; `,`/`.` nudge by 15 words
 - **Bold** words run ~25% slower, `inline code` is held longer in monospace
 - **Code blocks and tables** stop the stream and display whole until you continue
 - Lists, paragraphs, and long words all get their own pause rules

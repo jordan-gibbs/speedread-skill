@@ -85,14 +85,6 @@
   :root[data-theme="dark"] #logo { filter: invert(1); }
   body.playing header { display: none; }
 
-  /* ---- breadcrumb (MD extra; floats top-center, visible while playing) ---- */
-  #crumb {
-    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
-    max-width: 60vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    color: hsl(var(--muted-foreground)); font-size: 13px; z-index: 60;
-    pointer-events: none;
-  }
-
   /* ---- main column (mirrors the site's reading view) ---- */
   #content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
   .col {
@@ -289,8 +281,6 @@
 </style>
 </head>
 <body>
-  <div id="crumb"></div>
-
   <header>
     <a id="logolink" href="https://speedread.life" target="_blank" rel="noopener" title="speedread.life">
     <svg id="logo" viewBox="0 0 666 140" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Speedread">
@@ -384,7 +374,7 @@
         <div class="fontbtns" id="fontbtns"></div>
       </div>
 
-      <details id="mdpacing">
+      <details id="mdpacing" open>
         <summary>Markdown Pacing</summary>
         <div class="grid2" id="pacingGrid"></div>
         <button class="btn-outline" id="pacingReset">Reset to defaults</button>
@@ -689,14 +679,6 @@ function tokenize(blocks) {
     }
   });
 
-  // Breadcrumb paths: maintain a heading stack per section
-  var stack = [];
-  sections.forEach(function (s) {
-    while (stack.length && stack[stack.length - 1].level >= s.level) stack.pop();
-    stack.push(s);
-    s.path = stack.map(function (x) { return x.text; }).join(' › ');
-  });
-
   return { tokens: tokens, sections: sections };
 }
 
@@ -814,9 +796,12 @@ function rampedWpm(i) {
 }
 
 function endMult(tok) {
+  // Item ends scale the sentence pause (like paragraph ends) so bullets get
+  // a real beat; checked before sentEnd so a period inside a list item
+  // doesn't shadow the item pause.
   if (tok.paraEnd) return prefs.pause * prefs.paraPause;
+  if (tok.itemEnd) return prefs.pause * prefs.itemPause;
   if (tok.sentEnd) return prefs.pause;
-  if (tok.itemEnd) return prefs.itemPause;
   return 1;
 }
 
@@ -999,17 +984,8 @@ function fmtTime(seconds) {
   return rem > 0 ? hours + 'h ' + rem + 'm' : hours + 'h';
 }
 
-function sectionPathAt(i) {
-  var path = '';
-  for (var j = sections.length - 1; j >= 0; j--) {
-    if (sections[j].tokIdx <= i) { path = sections[j].path; break; }
-  }
-  return path;
-}
-
 function wordOrdinal(i) { return wordsBefore[clamp(i, 0, tokens.length)] || 0; }
 
-var crumbEl = document.getElementById('crumb');
 var pausedFill = document.getElementById('pausedFill');
 var pausedText = document.getElementById('pausedText');
 var playFill = document.getElementById('playFill');
@@ -1030,9 +1006,6 @@ function updateUI() {
   var hasStarted = idx > 0;
   var isFinished = tokens.length > 0 && idx >= tokens.length;
   skiprow.style.visibility = (!playing && hasStarted) ? 'visible' : 'hidden';
-
-  var path = sectionPathAt(Math.min(idx, tokens.length - 1));
-  crumbEl.textContent = path || docTitle;
 
   var count = wordOrdinal(idx) + ' / ' + nWords + ' words';
   var timeStr = '';

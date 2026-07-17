@@ -6,7 +6,7 @@
 
 <!-- demo video: drag demo-video.mp4 into this file in the GitHub editor and the attachment link will land here -->
 
-Coding agents produce a lot of prose (audit reports, research summaries, and the occasional migration writeup), and I got tired of scrolling through mine. With this skill, the agent writes its report as markdown, bundles it into a single self-contained HTML file, and opens it in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader that shows one word at a time at a fixed focal point. The range runs from 100 to 1600 WPM, starting at 500 out of the box, and after a session or two you'll probably find you read about twice as fast as you used to.
+Coding agents produce a lot of prose (audit reports, research summaries, and the occasional migration writeup), and I got tired of scrolling through mine. With this skill, the agent writes its report as markdown, bundles it into a single self-contained HTML file, and opens it in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader that shows one word at a time at a fixed focal point. The range runs from 100 to 1600 WPM, starting at 500 out of the box. After a session or two you'll probably read about twice as fast as you used to, and with practice most people can settle in around 800 WPM, roughly 3.5x a normal reading pace.
 
 The reader is built around markdown structure, which is what separates it from a dumb word-flasher:
 

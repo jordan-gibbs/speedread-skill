@@ -4,3 +4,6 @@
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Local video renders (uploaded via GitHub attachments, not committed)
+demo-video.mp4

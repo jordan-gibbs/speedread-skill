@@ -1,14 +1,16 @@
 # speedread-skill
 
-**Your AI agent reads the codebase. You speedread the report.**
+**Read content written by your coding agent 3.5x faster.**
 
 ![MIT license](https://img.shields.io/badge/license-MIT-green) ![zero dependencies](https://img.shields.io/badge/dependencies-none-blue)
 
-<!-- demo video: drag demo-video.mp4 into this file in the GitHub editor and the attachment link will land here -->
+https://github.com/user-attachments/assets/46c885d8-51be-4a73-a174-8677fefe35e8
 
-Coding agents produce a lot of prose (audit reports, research summaries, and the occasional migration writeup), and I got tired of scrolling through mine. With this skill, the agent writes its report as markdown, bundles it into a single self-contained HTML file, and opens it in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader that shows one word at a time at a fixed focal point. The range runs from 100 to 1600 WPM, starting at 500 out of the box. After a session or two you'll probably read about twice as fast as you used to, and with practice most people can settle in around 800 WPM, roughly 3.5x a normal reading pace.
+Coding agents produce a lot of text to read. Even with conciseness prompts, I got tired of scrolling through mine. With this skill, the agent writes its report as markdown, bundles it into a single self-contained HTML file, and opens it in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader that shows one word at a time at a fixed focal point. The range runs from 100 to 1600 WPM. 
 
-The reader is built around markdown structure, which is what separates it from a dumb word-flasher:
+Right off the bat, most people can get 2.5-3.5x reading speed increase, and with practice, you could read at upwards of 6x.
+
+The reader is built around markdown structure:
 
 - **Headings** stream through the same anchor point in ALL CAPS and your focus color, so you register a new section without your eyes ever moving
 - `←`/`→` jump between sections; `,`/`.` nudge by 15 words
@@ -18,13 +20,13 @@ The reader is built around markdown structure, which is what separates it from a
 - Lists, paragraphs, and long words each get their own pause rules
 - Press **D** anytime for a fully rendered document view
 
+All of the settings above are saved and tweakable between sessions. 
+
 ## Try it in ten seconds
 
 Open [`reader.html`](reader.html) in a browser. It ships with a built-in demo document. Press Space.
 
 ## Install
-
-This is a skill in the [Anthropic Skills format](https://github.com/anthropics/skills): a folder with a `SKILL.md` that your agent reads, plus the assets that it needs.
 
 **Claude Code**: clone it into your skills directory.
 
@@ -38,7 +40,7 @@ git clone https://github.com/jordan-gibbs/speedread-skill .claude/skills/speedre
 
 Then ask for it naturally ("audit this repo and give me a report I can speedread") or invoke it directly with `/speedread-report`.
 
-**Any other agent** (Cursor, Windsurf, custom): point it at [`SKILL.md`](SKILL.md). The instructions are plain markdown that covers the writing guidelines for RSVP-friendly reports and how to bundle the file and open it, so any agent that can write files and run a shell command can follow them.
+**Any other agent** (Cursor, Codex, custom): point it at [`SKILL.md`](SKILL.md). The instructions are plain markdown that covers the writing guidelines for RSVP-friendly reports and how to bundle the file and open it, so any agent that can write files and run a shell command can follow them.
 
 **No agent at all**: the injector works standalone.
 
@@ -63,7 +65,7 @@ python scripts/inject.py my-report.md --open
 | `D` | Toggle full document view |
 | `Esc` | Pause (or close document view) |
 
-Settings persist in `localStorage` between reports: speed (with 🔥 fire mode above 1200 WPM), font size, sentence pause, letter spacing, focus position, highlight color, five monospace fonts, and dark mode. The **Markdown Pacing** panel exposes the structural rules as well. Heading slowdown, paragraph and list-item pauses, bold and code slowdown, and ramp-up length are all adjustable and saved, with a one-click reset to defaults.
+Settings persist in `localStorage` between reports: speed, font size, sentence pause, letter spacing, focus position, highlight color, five monospace fonts, and dark mode. The **Markdown Pacing** panel exposes the structural rules as well. Heading slowdown, paragraph and list-item pauses, bold and code slowdown, and ramp-up length are all adjustable and saved, with a one-click reset to defaults.
 
 ## Privacy
 

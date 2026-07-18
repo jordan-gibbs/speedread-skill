@@ -1306,6 +1306,11 @@ function init() {
   document.getElementById('back100').addEventListener('click', function () { skipTokens(-100); });
 
   stage.addEventListener('click', function () { waiting ? continueBlock() : toggle(); });
+  // The fixed footer overlays the stage while playing — clicks there should
+  // pause too, not fall into a dead zone.
+  document.getElementById('playfooter').addEventListener('click', function () {
+    if (playing) pause();
+  });
 
   window.addEventListener('keydown', function (e) {
     var tag = e.target && e.target.tagName;

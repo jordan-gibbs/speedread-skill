@@ -104,9 +104,13 @@
     background: hsl(var(--background)); cursor: default;
   }
   .word-row { display: flex; align-items: baseline; font-weight: 500; line-height: 1.2; }
-  .side { white-space: pre; overflow: hidden; }
-  .side.pre { text-align: right; color: hsl(var(--foreground)); }
-  .side.suf { text-align: left; color: hsl(var(--foreground)); }
+  /* Sides clip long words at the outer edges, but the clip boundary sits
+     0.25em past the inner edge (padding + equal negative margin) so glyph
+     ink can overlap at negative letter spacing instead of getting sheared.
+     content-box keeps the width prop as content width despite the padding. */
+  .side { white-space: pre; overflow: hidden; box-sizing: content-box; }
+  .side.pre { text-align: right; color: hsl(var(--foreground)); padding-right: .25em; margin-right: -.25em; }
+  .side.suf { text-align: left; color: hsl(var(--foreground)); padding-left: .25em; margin-left: -.25em; }
   .marker { color: hsl(var(--muted-foreground)); }
   .state-tok { font-weight: 500; color: hsl(var(--muted-foreground)); }
   .hr-tok { color: hsl(var(--muted-foreground)); letter-spacing: .4em; }

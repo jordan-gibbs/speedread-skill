@@ -4,7 +4,7 @@
 
 ![MIT license](https://img.shields.io/badge/license-MIT-green) ![zero dependencies](https://img.shields.io/badge/dependencies-none-blue)
 
-https://github.com/user-attachments/assets/46c885d8-51be-4a73-a174-8677fefe35e8
+https://github.com/user-attachments/assets/20ed5914-c4fb-488b-b61e-d14ee8191761
 
 Coding agents produce a lot of text to read. Even with conciseness prompts, I got tired of scrolling through mine. With this skill, the agent writes its report as markdown, bundles it into a single self-contained HTML file, and opens it in your browser as an [RSVP](https://en.wikipedia.org/wiki/Rapid_serial_visual_presentation) speed-reader that shows one word at a time at a fixed focal point. The range runs from 100 to 1600 WPM. 
 
